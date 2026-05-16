@@ -3,6 +3,8 @@ import TOMLKit
 
 // 設定ファイルのロード・監視・リロードを担当する。
 // シングルトン。Bootstrap 後は current から読み取る。
+// DispatchSource は main queue で監視するため、main actor に固定する
+@MainActor
 final class ConfigManager {
     static let shared = ConfigManager()
 
@@ -93,14 +95,19 @@ final class ConfigManager {
             queue: .main
         )
         source.setEventHandler { [weak self] in
-            self?.scheduleReload()
-            // delete / rename ではエディタが上書き保存した可能性が高いので、監視を貼り直す
-            let flags = source.data
-            if flags.contains(.delete) || flags.contains(.rename) {
-                self?.fileSource?.cancel()
-                self?.fileSource = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    self?.startWatching()
+            // DispatchSource は main queue 指定なのでハンドラは main thread で呼ばれる
+            MainActor.assumeIsolated {
+                self?.scheduleReload()
+                // delete / rename ではエディタが上書き保存した可能性が高いので、監視を貼り直す
+                let flags = source.data
+                if flags.contains(.delete) || flags.contains(.rename) {
+                    self?.fileSource?.cancel()
+                    self?.fileSource = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        MainActor.assumeIsolated {
+                            self?.startWatching()
+                        }
+                    }
                 }
             }
         }
@@ -113,7 +120,11 @@ final class ConfigManager {
 
     private func scheduleReload() {
         reloadWorkItem?.cancel()
-        let item = DispatchWorkItem { [weak self] in self?.reload() }
+        let item = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                self?.reload()
+            }
+        }
         reloadWorkItem = item
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: item)
     }

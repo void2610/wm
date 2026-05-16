@@ -54,10 +54,7 @@ enum ShortcutParser {
         }
 
         guard let code = keyCode else { throw ParseError.missingKey }
-        guard let shortcut = KeyboardShortcuts.Shortcut(carbonKeyCode: code, carbonModifiers: carbonMods) else {
-            throw ParseError.missingKey
-        }
-        return shortcut
+        return KeyboardShortcuts.Shortcut(carbonKeyCode: code, carbonModifiers: carbonMods)
     }
 
     // MARK: - 名前 → Carbon key code

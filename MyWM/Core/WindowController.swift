@@ -4,6 +4,8 @@ import ApplicationServices
 // 高レベルのウィンドウ操作 API。
 // snap (1/2, 1/4)、maximize、center、toggleFullscreen を提供する。
 // 内部で AccessibilityClient を使って実ウィンドウへ反映する。
+// AX / NSWorkspace / PreviewWindow を触るため main actor に固定する
+@MainActor
 enum WindowController {
 
     // MARK: - スナップ系のエントリポイント
@@ -49,20 +51,17 @@ enum WindowController {
         guard let target = focusedTarget() else { return }
         let screen = currentScreen(of: target.window)
         guard let currentFrame = AccessibilityClient.getFrame(target.window) else { return }
-        // 現在サイズはそのまま、位置だけ中央へ
-        let nsScreenSize = screen.frame.size
-        // currentFrame は AX 座標。サイズだけ流用
+        // currentFrame は AX 座標なのでサイズだけ流用し、中心は visibleFrame から計算
         let visibleAX = NSScreen.convertToAX(screen.visibleFrame)
         let cx = visibleAX.midX
         let cy = visibleAX.midY
-        let target_ = CGRect(
+        let centered = CGRect(
             x: cx - currentFrame.width / 2,
             y: cy - currentFrame.height / 2,
             width: currentFrame.width,
             height: currentFrame.height
         )
-        _ = nsScreenSize // 警告抑止
-        applyFrame(target_, to: target)
+        applyFrame(centered, to: target)
     }
 
     // ネイティブのフルスクリーンをトグルする
@@ -111,7 +110,9 @@ enum WindowController {
 
         // 少し遅らせてプレビューをフェードアウト
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            PreviewWindow.shared.hide()
+            MainActor.assumeIsolated {
+                PreviewWindow.shared.hide()
+            }
         }
     }
 

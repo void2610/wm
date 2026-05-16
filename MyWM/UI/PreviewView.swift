@@ -14,7 +14,7 @@ struct PreviewView: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(.accentColor.opacity(0.6), lineWidth: 2)
+                    .strokeBorder(Color.accentColor.opacity(0.6), lineWidth: 2)
                     .blur(radius: 2)
             )
             .scaleEffect(isVisible ? 1.0 : 0.92)

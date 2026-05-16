@@ -10,6 +10,7 @@ enum Action: Equatable {
     case launchApp(bundleId: String)
 }
 
+@MainActor
 enum ActionDispatcher {
     static func dispatch(_ action: Action) {
         switch action {

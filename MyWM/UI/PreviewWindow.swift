@@ -44,11 +44,13 @@ final class PreviewWindow {
 
     // プレビューを隠す
     func hide() {
-        guard let panel else { return }
+        guard panel != nil else { return }
         state.isVisible = false
         // フェードアウト分の時間を待ってから window を閉じる
         let item = DispatchWorkItem { [weak self] in
-            self?.panel?.orderOut(nil)
+            MainActor.assumeIsolated {
+                self?.panel?.orderOut(nil)
+            }
         }
         hideWorkItem = item
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: item)

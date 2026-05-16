@@ -14,7 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 権限取得後の初期化を一度だけ走らせる
         permissionMonitor.onTrusted = { [weak self] in
-            self?.bootstrapAfterPermission()
+            MainActor.assumeIsolated {
+                self?.bootstrapAfterPermission()
+            }
         }
 
         if AccessibilityClient.isTrusted() {
