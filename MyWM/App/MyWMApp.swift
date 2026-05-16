@@ -14,20 +14,32 @@ struct MyWMApp: App {
     }
 }
 
-// メニューバーから開けるメニュー本体。Phase 5 で本格実装する想定
+// メニューバーから開けるメニュー本体
 private struct MenuBarContent: View {
     var body: some View {
         Button("設定…") {
-            // Phase 5: 設定画面を開く
+            AppWindows.showSettings()
         }
+        .keyboardShortcut(",")
+
         Divider()
+
         Button("config ファイルを開く") {
-            // Phase 5: ~/.config/mywm/config.toml を開く
+            NSWorkspace.shared.open(ConfigManager.configPath)
         }
-        Button("config を reload") {
-            // Phase 2: ConfigManager.reload() を呼ぶ
+        Button("config を再読み込み") {
+            ConfigManager.shared.reload()
         }
+
         Divider()
+
+        Button("アクセシビリティ権限の状態") {
+            // クリックでシステム設定を開く
+            PermissionMonitor.openSystemSettings()
+        }
+
+        Divider()
+
         Button("MyWM を終了") {
             NSApplication.shared.terminate(nil)
         }

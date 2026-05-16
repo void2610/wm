@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		06E3DA78921D60DC36F21F6A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6644BFDD0B0DA1F8D2BD6960 /* AppDelegate.swift */; };
+		08B8524CCA38FD30BF5699BE /* WindowControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C80201ED62F5F769512E1A6 /* WindowControllers.swift */; };
 		08E5295F421A7070145D3729 /* WindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DF2F7CDD35E311E35AE4CF5 /* WindowController.swift */; };
 		15C46946F704C17348590EAD /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88C3D39D6935E89D9F3E35A9 /* Config.swift */; };
 		2213C68E33F4FF7A4769F30E /* PreviewWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9AF03386AD97620DA56EA1E /* PreviewWindow.swift */; };
@@ -18,6 +19,8 @@
 		5E829ED04C90BB25BF63EED3 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236F96CFFA6005D0C6D2294C /* PreviewView.swift */; };
 		6DCD2AD1CC1085211F743EB6 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D330E654A5F07A86514C30E2 /* HotkeyManager.swift */; };
 		982FC036041EB04D964B686A /* ActionDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 430E3C74D68ED5D09FAE1DC7 /* ActionDispatcher.swift */; };
+		9A2CDF3995C6B64ED290CA5B /* ShortcutParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9B8EFA50EA3C6C99170EC0E /* ShortcutParser.swift */; };
+		B2CEA37F25E1654F8C52751E /* PermissionMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3491114CC0A15B352477265C /* PermissionMonitor.swift */; };
 		B87CB7F49601C4E0100962F4 /* MyWMTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36086593374F278DA30B6F74 /* MyWMTests.swift */; };
 		C3E2EA44BE8BE6617DF1D2CD /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ECD8CD8B233D0B65686D381 /* SettingsView.swift */; };
 		C3ED603DC766D12341CF33E3 /* AccessibilityClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 765C185EDE983D2D51A9AE08 /* AccessibilityClient.swift */; };
@@ -45,7 +48,9 @@
 		021102C97F8BEC9922F2602F /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		07C948DF64B1BE19F3C53F88 /* ConfigManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigManager.swift; sourceTree = "<group>"; };
 		236F96CFFA6005D0C6D2294C /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
+		2C80201ED62F5F769512E1A6 /* WindowControllers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowControllers.swift; sourceTree = "<group>"; };
 		2F9FAA5EF94CBEA263CEC366 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		3491114CC0A15B352477265C /* PermissionMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionMonitor.swift; sourceTree = "<group>"; };
 		36086593374F278DA30B6F74 /* MyWMTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyWMTests.swift; sourceTree = "<group>"; };
 		399B38A0EC9FACE16491BC69 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4274A4919BF660A3DBA2A45A /* MyWM.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MyWM.entitlements; sourceTree = "<group>"; };
@@ -61,6 +66,7 @@
 		AB70202009DC5A5E2BBB9398 /* FocusNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusNavigator.swift; sourceTree = "<group>"; };
 		C7917770D8626CDBB262D057 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		C9AF03386AD97620DA56EA1E /* PreviewWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWindow.swift; sourceTree = "<group>"; };
+		C9B8EFA50EA3C6C99170EC0E /* ShortcutParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutParser.swift; sourceTree = "<group>"; };
 		D330E654A5F07A86514C30E2 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
 		D7EE3EE39839571CC17E39EC /* AnimationConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationConstants.swift; sourceTree = "<group>"; };
 		E0199878BB39BB3B4DF7C6E1 /* MyWMApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyWMApp.swift; sourceTree = "<group>"; };
@@ -88,6 +94,7 @@
 				236F96CFFA6005D0C6D2294C /* PreviewView.swift */,
 				C9AF03386AD97620DA56EA1E /* PreviewWindow.swift */,
 				4ECD8CD8B233D0B65686D381 /* SettingsView.swift */,
+				2C80201ED62F5F769512E1A6 /* WindowControllers.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -134,6 +141,7 @@
 			children = (
 				430E3C74D68ED5D09FAE1DC7 /* ActionDispatcher.swift */,
 				D330E654A5F07A86514C30E2 /* HotkeyManager.swift */,
+				C9B8EFA50EA3C6C99170EC0E /* ShortcutParser.swift */,
 			);
 			path = Hotkeys;
 			sourceTree = "<group>";
@@ -179,6 +187,7 @@
 			isa = PBXGroup;
 			children = (
 				021102C97F8BEC9922F2602F /* OnboardingView.swift */,
+				3491114CC0A15B352477265C /* PermissionMonitor.swift */,
 			);
 			path = Onboarding;
 			sourceTree = "<group>";
@@ -305,11 +314,14 @@
 				38D95E2554F2E8A81A9BE226 /* Log.swift in Sources */,
 				31C0982C1EEA9C3D34CAD5AB /* MyWMApp.swift in Sources */,
 				DC3940AB85D8E6F8D627343E /* OnboardingView.swift in Sources */,
+				B2CEA37F25E1654F8C52751E /* PermissionMonitor.swift in Sources */,
 				5E829ED04C90BB25BF63EED3 /* PreviewView.swift in Sources */,
 				2213C68E33F4FF7A4769F30E /* PreviewWindow.swift in Sources */,
 				C8FE77E026BA298DA7583BC5 /* Screen+Extensions.swift in Sources */,
 				C3E2EA44BE8BE6617DF1D2CD /* SettingsView.swift in Sources */,
+				9A2CDF3995C6B64ED290CA5B /* ShortcutParser.swift in Sources */,
 				08E5295F421A7070145D3729 /* WindowController.swift in Sources */,
+				08B8524CCA38FD30BF5699BE /* WindowControllers.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

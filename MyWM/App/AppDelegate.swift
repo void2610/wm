@@ -1,17 +1,43 @@
 import AppKit
 
-// NSApplicationDelegate。起動時のアクセシビリティ権限チェック等を担当する
+// NSApplicationDelegate。アプリ起動時のオーケストレーションを行う。
+// - Dock を出さず accessory にする
+// - アクセシビリティ権限のチェックと polling
+// - 権限取得後に ConfigManager と HotkeyManager を起動
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+
+    let permissionMonitor = PermissionMonitor()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Dock アイコンを出さず、Activation Policy を accessory に固定する
         NSApp.setActivationPolicy(.accessory)
 
-        // Phase 1: AccessibilityClient の権限チェックを呼ぶ
-        // Phase 2: ConfigManager をロードする
-        // Phase 1: HotkeyManager をセットアップする
+        // 権限取得後の初期化を一度だけ走らせる
+        permissionMonitor.onTrusted = { [weak self] in
+            self?.bootstrapAfterPermission()
+        }
+
+        if AccessibilityClient.isTrusted() {
+            // 既に許可済みなら即座に初期化
+            bootstrapAfterPermission()
+        } else {
+            // 未許可なら Onboarding を出し、初回プロンプトを促す
+            AppWindows.showOnboarding(monitor: permissionMonitor)
+            PermissionMonitor.requestPrompt()
+            permissionMonitor.start()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Phase 1: HotkeyManager をクリーンアップする
+        HotkeyManager.shared.unregisterAll()
+        permissionMonitor.stop()
+    }
+
+    // 権限取得後に呼ばれる初期化
+    private func bootstrapAfterPermission() {
+        ConfigManager.shared.bootstrap()
+        HotkeyManager.shared.attachToConfig()
+        AppWindows.closeOnboarding()
+        Log.app.info("初期化完了")
     }
 }
