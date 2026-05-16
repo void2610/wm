@@ -1,0 +1,66 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+profile
+timeline.xctimeline
+playground.xcworkspace
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+.swiftpm/
+
+# CocoaPods（使わない予定だが念のため）
+Pods/
+
+# Carthage
+Carthage/Build/
+Carthage/Checkouts/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Sparkle 配布用秘密鍵
+*.pem
+sparkle_private_key
+dsa_priv.pem
+ed25519_priv
+
+# エディタ
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ログ
+*.log
