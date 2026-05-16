@@ -11,6 +11,9 @@ DerivedData/
 *.xcuserstate
 *.xcuserdatad/
 xcuserdata/
+
+# xcodegen で再生成されるため commit しない
+*.xcodeproj/
 *.xcscmblueprint
 *.xccheckout
 *.moved-aside

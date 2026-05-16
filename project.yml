@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.void2610
   deploymentTarget:
     macOS: "13.0"
+  xcodeVersion: "15.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
   groupSortPosition: top
