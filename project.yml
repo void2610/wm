@@ -1,0 +1,96 @@
+name: MyWM
+options:
+  bundleIdPrefix: com.void2610
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+
+packages:
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 2.2.1
+  TOMLKit:
+    url: https://github.com/LebJe/TOMLKit
+    from: 0.6.0
+
+targets:
+  MyWM:
+    type: application
+    platform: macOS
+    sources:
+      - path: MyWM
+        excludes:
+          - "**/.DS_Store"
+    resources:
+      - path: MyWM/Config/DefaultConfig.toml
+    info:
+      path: MyWM/Info.plist
+      properties:
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundleDisplayName: MyWM
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundlePackageType: APPL
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSUIElement: true
+        NSHumanReadableCopyright: ""
+        NSAccessibilityUsageDescription: "ウィンドウを移動・リサイズするためにアクセシビリティ権限が必要です。"
+        NSAppleEventsUsageDescription: "他アプリの操作を行うために必要です。"
+        NSSupportsAutomaticTermination: false
+        NSSupportsSuddenTermination: false
+    entitlements:
+      path: MyWM/MyWM.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.automation.apple-events: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.void2610.MyWM
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_PREVIEWS: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        COMBINE_HIDPI_IMAGES: YES
+    dependencies:
+      - package: KeyboardShortcuts
+      - package: TOMLKit
+
+  MyWMTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - MyWMTests
+    dependencies:
+      - target: MyWM
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.void2610.MyWMTests
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/MyWM.app/Contents/MacOS/MyWM"
+
+schemes:
+  MyWM:
+    build:
+      targets:
+        MyWM: all
+        MyWMTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MyWMTests
+    archive:
+      config: Release

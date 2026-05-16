@@ -1,0 +1,31 @@
+# MyWM デフォルト設定ファイル
+# このファイルは初回起動時に ~/.config/mywm/config.toml にコピーされる。
+# モディファイア表記: cmd, opt, ctrl, shift
+
+[general]
+animation_enabled = true
+animation_duration = 0.25
+padding = 8
+
+[hotkeys]
+focus_left  = "cmd+opt+left"
+focus_right = "cmd+opt+right"
+focus_up    = "cmd+opt+up"
+focus_down  = "cmd+opt+down"
+
+snap_left   = "cmd+ctrl+left"
+snap_right  = "cmd+ctrl+right"
+snap_top    = "cmd+ctrl+up"
+snap_bottom = "cmd+ctrl+down"
+maximize    = "cmd+ctrl+return"
+center      = "cmd+ctrl+c"
+
+snap_top_left     = "cmd+ctrl+shift+left"
+snap_top_right    = "cmd+ctrl+shift+right"
+snap_bottom_left  = "cmd+opt+shift+left"
+snap_bottom_right = "cmd+opt+shift+right"
+
+# アプリ起動ホットキーの例
+# [[launch]]
+# key = "cmd+shift+1"
+# bundle_id = "com.apple.Safari"
