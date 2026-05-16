@@ -2,7 +2,7 @@ import Foundation
 
 // ホットキー → アクション の中継層。Command パターンで疎結合にしておき、
 // CLI 連携（mywm focus left など）が来てもここで集約できるようにする。
-enum Action {
+enum Action: Equatable {
     case focus(FocusNavigator.Direction)
     case snapLeft, snapRight, snapTop, snapBottom
     case snapTopLeft, snapTopRight, snapBottomLeft, snapBottomRight
@@ -23,9 +23,14 @@ enum ActionDispatcher {
             WindowController.snapToTopHalf()
         case .snapBottom:
             WindowController.snapToBottomHalf()
-        case .snapTopLeft, .snapTopRight, .snapBottomLeft, .snapBottomRight:
-            // Phase 1: 1/4 分割の実装を追加する
-            break
+        case .snapTopLeft:
+            WindowController.snapToTopLeftQuarter()
+        case .snapTopRight:
+            WindowController.snapToTopRightQuarter()
+        case .snapBottomLeft:
+            WindowController.snapToBottomLeftQuarter()
+        case .snapBottomRight:
+            WindowController.snapToBottomRightQuarter()
         case .maximize:
             WindowController.maximize()
         case .center:
