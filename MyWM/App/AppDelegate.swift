@@ -1,8 +1,10 @@
 import AppKit
 
 // NSApplicationDelegate。アプリ起動時のオーケストレーションを行う。
-// - 通常時は accessory（Dock 無し）で常駐
-// - 権限未許可時のみ .regular に切替えて Onboarding を前面化
+// - LSUIElement=YES なので常に accessory として起動する。
+//   ActivationPolicy を後から切り替えると SwiftUI の MenuBarExtra が
+//   インストールされなくなるため、policy はいじらない方針。
+// - 権限未許可時は Onboarding ウィンドウを NSApp.activate で前面化する
 // - 権限取得後に ConfigManager と HotkeyManager を起動
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -18,12 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if AccessibilityClient.isTrusted() {
-            // 既に許可済みなら accessory のまま起動
-            NSApp.setActivationPolicy(.accessory)
             bootstrapAfterPermission()
         } else {
-            // 未許可なら .regular に切替えて Onboarding を前面化
-            NSApp.setActivationPolicy(.regular)
+            // accessory のまま Onboarding を前面化する。activate でフォーカスを取りに行く。
             NSApp.activate(ignoringOtherApps: true)
             AppWindows.showOnboarding(monitor: permissionMonitor)
             PermissionMonitor.requestPrompt()
@@ -38,7 +37,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // 権限取得後に呼ばれる初期化
     private func bootstrapAfterPermission() {
-        NSApp.setActivationPolicy(.accessory)
         ConfigManager.shared.bootstrap()
         HotkeyManager.shared.attachToConfig()
         AppWindows.closeOnboarding()
