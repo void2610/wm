@@ -5,7 +5,6 @@ import Foundation
 enum Action: Equatable {
     case focus(FocusNavigator.Direction)
     case snapLeft, snapRight, snapTop, snapBottom
-    case snapTopLeft, snapTopRight, snapBottomLeft, snapBottomRight
     case maximize, center, toggleFullscreen
     case launchApp(bundleId: String)
 }
@@ -24,14 +23,6 @@ enum ActionDispatcher {
             WindowController.snapToTopHalf()
         case .snapBottom:
             WindowController.snapToBottomHalf()
-        case .snapTopLeft:
-            WindowController.snapToTopLeftQuarter()
-        case .snapTopRight:
-            WindowController.snapToTopRightQuarter()
-        case .snapBottomLeft:
-            WindowController.snapToBottomLeftQuarter()
-        case .snapBottomRight:
-            WindowController.snapToBottomRightQuarter()
         case .maximize:
             WindowController.maximize()
         case .center:

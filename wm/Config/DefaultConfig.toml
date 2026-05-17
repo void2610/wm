@@ -13,17 +13,17 @@ focus_right = "cmd+opt+right"
 focus_up    = "cmd+opt+up"
 focus_down  = "cmd+opt+down"
 
+# snap_left / snap_right は同じキーを連打すると
+#   半分 → 上 1/4 → 下 1/4 → 半分 → ...
+# と巡回する。snap_top は
+#   上半分 → 全画面
+# に巡回する
 snap_left   = "cmd+ctrl+left"
 snap_right  = "cmd+ctrl+right"
 snap_top    = "cmd+ctrl+up"
 snap_bottom = "cmd+ctrl+down"
 maximize    = "cmd+ctrl+return"
 center      = "cmd+ctrl+c"
-
-snap_top_left     = "cmd+ctrl+shift+left"
-snap_top_right    = "cmd+ctrl+shift+right"
-snap_bottom_left  = "cmd+opt+shift+left"
-snap_bottom_right = "cmd+opt+shift+right"
 
 # アプリ起動ホットキーの例
 # [[launch]]

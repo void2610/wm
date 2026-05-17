@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 
 // 高レベルのウィンドウ操作 API。
-// snap (1/2, 1/4)、maximize、center、toggleFullscreen を提供する。
+// snap、maximize、center、toggleFullscreen を提供する。
 // 内部で AccessibilityClient を使って実ウィンドウへ反映する。
 // AX / NSWorkspace / PreviewWindow を触るため main actor に固定する
 @MainActor
@@ -10,50 +10,58 @@ enum WindowController {
 
     // MARK: - スナップ系のエントリポイント
 
+    // 左方向のスナップを 3 段階に巡回させる:
+    //   左半分 → 左上 1/4 → 左下 1/4 → 左半分 → ...
+    // それ以外の位置から押した場合は左半分。
+    // 判定はサイズ制約のあるアプリでも効くよう「端揃え」ベースで行う
     static func snapToLeftHalf() {
-        snap { screen, padding in screen.leftHalf(padding: padding) }
+        snap { screen, padding, currentNS in
+            let leftHalf = screen.leftHalf(padding: padding)
+            let topLeft = screen.topLeftQuarter(padding: padding)
+            let bottomLeft = screen.bottomLeftQuarter(padding: padding)
+
+            guard let cur = currentNS else { return leftHalf }
+            if isAtLeftHalf(cur, screen: screen, padding: padding) { return topLeft }
+            if isAtTopLeftQuarter(cur, screen: screen, padding: padding) { return bottomLeft }
+            if isAtBottomLeftQuarter(cur, screen: screen, padding: padding) { return leftHalf }
+            return leftHalf
+        }
     }
 
+    // 右方向のスナップを 3 段階に巡回させる:
+    //   右半分 → 右上 1/4 → 右下 1/4 → 右半分 → ...
     static func snapToRightHalf() {
-        snap { screen, padding in screen.rightHalf(padding: padding) }
+        snap { screen, padding, currentNS in
+            let rightHalf = screen.rightHalf(padding: padding)
+            let topRight = screen.topRightQuarter(padding: padding)
+            let bottomRight = screen.bottomRightQuarter(padding: padding)
+
+            guard let cur = currentNS else { return rightHalf }
+            if isAtRightHalf(cur, screen: screen, padding: padding) { return topRight }
+            if isAtTopRightQuarter(cur, screen: screen, padding: padding) { return bottomRight }
+            if isAtBottomRightQuarter(cur, screen: screen, padding: padding) { return rightHalf }
+            return rightHalf
+        }
     }
 
-    // 上半分にある状態でもう一度上を入力すると全画面に巡回する。
-    // GitHub Desktop / Unity Hub のような最小サイズ制約のあるアプリでも、
-    // ウィンドウの実 frame が target と厳密に一致しなくても巡回判定が効くよう、
-    // 「上端揃え + ほぼ全幅 + まだ最大化していない高さ」の位置ベース予測で判定する
+    // 上半分にある状態でもう一度上を入力すると全画面に巡回する
     static func snapToTopHalf() {
-        snap(
-            { screen, padding in screen.topHalf(padding: padding) },
-            cycleTo: { screen, padding in screen.paddedVisibleFrame(padding: padding) },
-            shouldCycle: { current, screen, padding in
-                Self.isAtTopHalfPosition(current, screen: screen, padding: padding)
-            }
-        )
+        snap { screen, padding, currentNS in
+            let topHalf = screen.topHalf(padding: padding)
+            let maxRect = screen.paddedVisibleFrame(padding: padding)
+
+            guard let cur = currentNS else { return topHalf }
+            if isAtTopHalfPosition(cur, screen: screen, padding: padding) { return maxRect }
+            return topHalf
+        }
     }
 
     static func snapToBottomHalf() {
-        snap { screen, padding in screen.bottomHalf(padding: padding) }
-    }
-
-    static func snapToTopLeftQuarter() {
-        snap { screen, padding in screen.topLeftQuarter(padding: padding) }
-    }
-
-    static func snapToTopRightQuarter() {
-        snap { screen, padding in screen.topRightQuarter(padding: padding) }
-    }
-
-    static func snapToBottomLeftQuarter() {
-        snap { screen, padding in screen.bottomLeftQuarter(padding: padding) }
-    }
-
-    static func snapToBottomRightQuarter() {
-        snap { screen, padding in screen.bottomRightQuarter(padding: padding) }
+        snap { screen, padding, _ in screen.bottomHalf(padding: padding) }
     }
 
     static func maximize() {
-        snap { screen, padding in screen.paddedVisibleFrame(padding: padding) }
+        snap { screen, padding, _ in screen.paddedVisibleFrame(padding: padding) }
     }
 
     // 現在のサイズを保ったまま画面中央に配置する
@@ -105,39 +113,23 @@ enum WindowController {
         return NSScreen.containingAX(point: centerAX)
     }
 
-    // snap 系の共通処理。compute は NSScreen 座標で目標枠を返すクロージャ。
-    // cycleTo + shouldCycle が指定されていて shouldCycle が true を返した場合は
-    // 代わりに cycleTo の結果へ巡回する（例: 上半分の状態で再度上を入力 → 最大化）
-    private static func snap(
-        _ compute: (NSScreen, CGFloat) -> CGRect,
-        cycleTo: ((NSScreen, CGFloat) -> CGRect)? = nil,
-        shouldCycle: ((CGRect, NSScreen, CGFloat) -> Bool)? = nil
-    ) {
+    // snap 系の共通処理。compute は (NSScreen, padding, 現在の NSScreen 座標 frame)
+    // を受け取って次の target rect を返す。巡回ロジックは compute 側で組む
+    private static func snap(_ compute: (NSScreen, CGFloat, CGRect?) -> CGRect) {
         guard let target = focusedTarget() else { return }
         let screen = currentScreen(of: target.window)
         let padding = CGFloat(ConfigManager.shared.current.general.padding)
-        let primaryRect = compute(screen, padding)
 
         // 現ウィンドウの NSScreen 座標 frame。slide の起点としても、巡回判定にも使う
         let currentNS: CGRect? = AccessibilityClient.getFrame(target.window)
             .map { NSScreen.convertFromAX($0) }
 
-        let nsRect: CGRect = {
-            if let cycle = cycleTo,
-               let predicate = shouldCycle,
-               let cur = currentNS,
-               predicate(cur, screen, padding) {
-                return cycle(screen, padding)
-            }
-            return primaryRect
-        }()
-
+        let nsRect = compute(screen, padding, currentNS)
         let fromNS: CGRect? = currentNS
 
-        // 先に実ウィンドウへ反映する。min size 制約のあるアプリ（GitHub Desktop /
-        // Unity Hub 等）では target どおりにならないことがあるため、適用後の
-        // 実 frame を読み直し、それをプレビューの終端位置として渡す。
-        // こうしないとアニメと実ウィンドウのサイズがずれて見える
+        // 先に実ウィンドウへ反映する。min size 制約のあるアプリでは target どおりに
+        // ならないことがあるため、適用後の実 frame を読み直してプレビューの終端
+        // 位置として渡す。こうしないとアニメと実ウィンドウのサイズがずれて見える
         let axRect = NSScreen.convertToAX(nsRect)
         applyFrame(axRect, to: target)
 
@@ -150,21 +142,93 @@ enum WindowController {
         PreviewWindow.shared.show(at: actualNS, from: fromNS, autoHideAfter: animDur)
     }
 
-    // ウィンドウが「上半分っぽい位置」にあるかどうかの位置ベース判定。
-    // 上端が padded visible の上端に揃っていて、ほぼ全幅、かつまだ最大化されていない
-    // 高さなら上半分とみなす。GitHub Desktop / Unity Hub 等 min size 制約のある
-    // アプリでも、target と厳密一致しなくても巡回が成立する
-    private static func isAtTopHalfPosition(
-        _ current: CGRect,
-        screen: NSScreen,
-        padding: CGFloat
-    ) -> Bool {
+    // MARK: - 位置ベースの状態判定
+    //
+    // サイズ制約のあるアプリ（GitHub Desktop / Unity Hub 等）でも巡回判定が成立する
+    // よう、target との厳密一致ではなく「左／右カラムの開始位置」と「上／下端揃え」
+    // で判断する。サイズ制約で window が padded の境界を超えて広がっていても、
+    // 左端の位置を頼りに「どの半分／クォーターを意図したか」を判定できる
+
+    private static let edgeTolerance: CGFloat = 10
+
+    // 左カラム（minX = padded.minX）
+    private static func atLeftColumn(_ current: CGRect, padded: CGRect) -> Bool {
+        abs(current.minX - padded.minX) < edgeTolerance
+    }
+
+    // 右カラム（minX = 右半分の左端 ≒ padded の右半分の開始位置）
+    private static func atRightColumn(_ current: CGRect, padded: CGRect, padding: CGFloat) -> Bool {
+        let rightColumnStart = padded.minX + (padded.width + padding) / 2
+        return abs(current.minX - rightColumnStart) < edgeTolerance
+    }
+
+    // 上端揃え（NS 座標は Y 上方向、上端 = maxY）
+    private static func topAligned(_ current: CGRect, padded: CGRect) -> Bool {
+        abs(current.maxY - padded.maxY) < edgeTolerance
+    }
+
+    private static func bottomAligned(_ current: CGRect, padded: CGRect) -> Bool {
+        abs(current.minY - padded.minY) < edgeTolerance
+    }
+
+    // 右端揃え（最大化判定に使う）
+    private static func rightAligned(_ current: CGRect, padded: CGRect) -> Bool {
+        abs(current.maxX - padded.maxX) < edgeTolerance
+    }
+
+    // 上半分相当: 上端揃え + 下端非揃え + 左カラム + 右端揃え（全幅）
+    // 下端非揃えで「最大化」と区別する
+    private static func isAtTopHalfPosition(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
         let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
-        // NS は Y 上方向なので画面上端 = maxY
-        let topAligned = abs(current.maxY - padded.maxY) < 10
-        let fullWidth = current.width > padded.width * 0.9
-        let notMaxed = current.height < padded.height * 0.9
-        return topAligned && fullWidth && notMaxed
+        return atLeftColumn(current, padded: padded)
+            && rightAligned(current, padded: padded)
+            && topAligned(current, padded: padded)
+            && !bottomAligned(current, padded: padded)
+    }
+
+    // 左半分相当: 左カラム + 上下端揃え + 右端非揃え（半幅）
+    private static func isAtLeftHalf(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
+        let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
+        return atLeftColumn(current, padded: padded)
+            && topAligned(current, padded: padded)
+            && bottomAligned(current, padded: padded)
+            && !rightAligned(current, padded: padded)
+    }
+
+    // 右半分相当: 右カラム + 上下端揃え
+    private static func isAtRightHalf(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
+        let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
+        return atRightColumn(current, padded: padded, padding: padding)
+            && topAligned(current, padded: padded)
+            && bottomAligned(current, padded: padded)
+    }
+
+    private static func isAtTopLeftQuarter(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
+        let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
+        return atLeftColumn(current, padded: padded)
+            && topAligned(current, padded: padded)
+            && !bottomAligned(current, padded: padded)
+    }
+
+    private static func isAtBottomLeftQuarter(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
+        let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
+        return atLeftColumn(current, padded: padded)
+            && !topAligned(current, padded: padded)
+            && bottomAligned(current, padded: padded)
+    }
+
+    private static func isAtTopRightQuarter(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
+        let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
+        return atRightColumn(current, padded: padded, padding: padding)
+            && topAligned(current, padded: padded)
+            && !bottomAligned(current, padded: padded)
+    }
+
+    private static func isAtBottomRightQuarter(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
+        let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
+        return atRightColumn(current, padded: padded, padding: padding)
+            && !topAligned(current, padded: padded)
+            && bottomAligned(current, padded: padded)
     }
 
     // AXEnhancedUserInterface を活用しつつ frame を適用する

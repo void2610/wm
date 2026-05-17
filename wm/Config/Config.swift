@@ -70,10 +70,6 @@ extension Config {
         case "snap_right":        return .snapRight
         case "snap_top":          return .snapTop
         case "snap_bottom":       return .snapBottom
-        case "snap_top_left":     return .snapTopLeft
-        case "snap_top_right":    return .snapTopRight
-        case "snap_bottom_left":  return .snapBottomLeft
-        case "snap_bottom_right": return .snapBottomRight
         case "maximize":          return .maximize
         case "center":            return .center
         case "toggle_fullscreen": return .toggleFullscreen
