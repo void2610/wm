@@ -29,7 +29,7 @@ jobs:
       - name: Generate xcodeproj
         run: xcodegen generate --spec project.yml
 
-      - name: Build
+      - name: Build (Debug)
         run: |
           set -o pipefail
           xcodebuild \
@@ -54,3 +54,43 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             test
+
+      - name: Build (Release)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MyWM.xcodeproj \
+            -scheme MyWM \
+            -configuration Release \
+            -destination "platform=macOS" \
+            -derivedDataPath build \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package .app
+        id: package
+        run: |
+          set -e
+          APP_PATH="build/Build/Products/Release/MyWM.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Release build の .app が見つかりません: $APP_PATH"
+            ls -R build/Build/Products || true
+            exit 1
+          fi
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          ZIP_NAME="MyWM-${SHORT_SHA}.zip"
+          # ditto は .app バンドルのメタデータと拡張属性を保ったまま zip 化できる
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_NAME"
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          ls -la "$ZIP_NAME"
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyWM-${{ steps.package.outputs.short_sha }}
+          path: ${{ steps.package.outputs.zip_name }}
+          if-no-files-found: error
+          retention-days: 14
