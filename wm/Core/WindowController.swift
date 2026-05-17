@@ -18,11 +18,17 @@ enum WindowController {
         snap { screen, padding in screen.rightHalf(padding: padding) }
     }
 
-    // 上半分にある状態でもう一度上を入力すると全画面に巡回する
+    // 上半分にある状態でもう一度上を入力すると全画面に巡回する。
+    // GitHub Desktop / Unity Hub のような最小サイズ制約のあるアプリでも、
+    // ウィンドウの実 frame が target と厳密に一致しなくても巡回判定が効くよう、
+    // 「上端揃え + ほぼ全幅 + まだ最大化していない高さ」の位置ベース予測で判定する
     static func snapToTopHalf() {
         snap(
             { screen, padding in screen.topHalf(padding: padding) },
-            cycleTo: { screen, padding in screen.paddedVisibleFrame(padding: padding) }
+            cycleTo: { screen, padding in screen.paddedVisibleFrame(padding: padding) },
+            shouldCycle: { current, screen, padding in
+                Self.isAtTopHalfPosition(current, screen: screen, padding: padding)
+            }
         )
     }
 
@@ -100,11 +106,12 @@ enum WindowController {
     }
 
     // snap 系の共通処理。compute は NSScreen 座標で目標枠を返すクロージャ。
-    // cycleTo が指定されていて、現ウィンドウが compute の結果と一致している場合は
+    // cycleTo + shouldCycle が指定されていて shouldCycle が true を返した場合は
     // 代わりに cycleTo の結果へ巡回する（例: 上半分の状態で再度上を入力 → 最大化）
     private static func snap(
         _ compute: (NSScreen, CGFloat) -> CGRect,
-        cycleTo: ((NSScreen, CGFloat) -> CGRect)? = nil
+        cycleTo: ((NSScreen, CGFloat) -> CGRect)? = nil,
+        shouldCycle: ((CGRect, NSScreen, CGFloat) -> Bool)? = nil
     ) {
         guard let target = focusedTarget() else { return }
         let screen = currentScreen(of: target.window)
@@ -115,11 +122,11 @@ enum WindowController {
         let currentNS: CGRect? = AccessibilityClient.getFrame(target.window)
             .map { NSScreen.convertFromAX($0) }
 
-        // 既に primary と一致していて cycleTo が指定されていれば、巡回先を採用する
         let nsRect: CGRect = {
             if let cycle = cycleTo,
+               let predicate = shouldCycle,
                let cur = currentNS,
-               Self.framesMatch(cur, primaryRect) {
+               predicate(cur, screen, padding) {
                 return cycle(screen, padding)
             }
             return primaryRect
@@ -138,13 +145,21 @@ enum WindowController {
         applyFrame(axRect, to: target)
     }
 
-    // 2 つの frame がほぼ一致しているか。AX 値の丸めやアプリ側のサイズ制約で
-    // 数 px ずれることがあるため、広めの tolerance を持たせる
-    private static func framesMatch(_ a: CGRect, _ b: CGRect, tolerance: CGFloat = 5.0) -> Bool {
-        abs(a.minX - b.minX) < tolerance &&
-        abs(a.minY - b.minY) < tolerance &&
-        abs(a.width - b.width) < tolerance &&
-        abs(a.height - b.height) < tolerance
+    // ウィンドウが「上半分っぽい位置」にあるかどうかの位置ベース判定。
+    // 上端が padded visible の上端に揃っていて、ほぼ全幅、かつまだ最大化されていない
+    // 高さなら上半分とみなす。GitHub Desktop / Unity Hub 等 min size 制約のある
+    // アプリでも、target と厳密一致しなくても巡回が成立する
+    private static func isAtTopHalfPosition(
+        _ current: CGRect,
+        screen: NSScreen,
+        padding: CGFloat
+    ) -> Bool {
+        let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
+        // NS は Y 上方向なので画面上端 = maxY
+        let topAligned = abs(current.maxY - padded.maxY) < 10
+        let fullWidth = current.width > padded.width * 0.9
+        let notMaxed = current.height < padded.height * 0.9
+        return topAligned && fullWidth && notMaxed
     }
 
     // AXEnhancedUserInterface を活用しつつ frame を適用する
