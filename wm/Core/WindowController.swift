@@ -134,15 +134,20 @@ enum WindowController {
 
         let fromNS: CGRect? = currentNS
 
-        // プレビューを表示してから実ウィンドウを更新する（Phase 4）。
-        // autoHideAfter はスライドアニメ duration と一致させ、スライド完走と同時に
-        // フェード退出が始まるようにする。これでスライド中にフェードが先取りされる
-        // 「フェード中スライド」現象を消す
-        let animDur = ConfigManager.shared.current.general.animationDuration
-        PreviewWindow.shared.show(at: nsRect, from: fromNS, autoHideAfter: animDur)
-
+        // 先に実ウィンドウへ反映する。min size 制約のあるアプリ（GitHub Desktop /
+        // Unity Hub 等）では target どおりにならないことがあるため、適用後の
+        // 実 frame を読み直し、それをプレビューの終端位置として渡す。
+        // こうしないとアニメと実ウィンドウのサイズがずれて見える
         let axRect = NSScreen.convertToAX(nsRect)
         applyFrame(axRect, to: target)
+
+        let actualNS: CGRect = AccessibilityClient.getFrame(target.window)
+            .map { NSScreen.convertFromAX($0) } ?? nsRect
+
+        // autoHideAfter はスライドアニメ duration と一致させ、スライド完走と同時に
+        // フェード退出が始まるようにする
+        let animDur = ConfigManager.shared.current.general.animationDuration
+        PreviewWindow.shared.show(at: actualNS, from: fromNS, autoHideAfter: animDur)
     }
 
     // ウィンドウが「上半分っぽい位置」にあるかどうかの位置ベース判定。
