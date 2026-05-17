@@ -1,10 +1,26 @@
 import Foundation
 
 // TOML 設定ファイルのスキーマ。Codable + TOMLKit でデシリアライズする
+// 全フィールドはオプショナル扱い。記述が無ければ default 値を使う
 struct Config: Codable, Equatable {
     var general: General = General()
     var hotkeys: [String: String] = [:]
     var launch: [Launch] = []
+
+    enum CodingKeys: String, CodingKey {
+        case general
+        case hotkeys
+        case launch
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.general = try c.decodeIfPresent(General.self, forKey: .general) ?? General()
+        self.hotkeys = try c.decodeIfPresent([String: String].self, forKey: .hotkeys) ?? [:]
+        self.launch = try c.decodeIfPresent([Launch].self, forKey: .launch) ?? []
+    }
 
     struct General: Codable, Equatable {
         var animationEnabled: Bool = true
@@ -18,6 +34,16 @@ struct Config: Codable, Equatable {
             case animationDuration = "animation_duration"
             case padding
             case enhancedUIExcluded = "enhanced_ui_excluded"
+        }
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.animationEnabled = try c.decodeIfPresent(Bool.self, forKey: .animationEnabled) ?? true
+            self.animationDuration = try c.decodeIfPresent(Double.self, forKey: .animationDuration) ?? 0.25
+            self.padding = try c.decodeIfPresent(Int.self, forKey: .padding) ?? 8
+            self.enhancedUIExcluded = try c.decodeIfPresent([String].self, forKey: .enhancedUIExcluded) ?? []
         }
     }
 
