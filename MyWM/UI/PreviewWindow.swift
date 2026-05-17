@@ -1,71 +1,100 @@
 import AppKit
 import SwiftUI
+import Combine
 
 // スナップ先を予告する半透明ウィンドウ。
-// NSPanel ベースで非アクティベート・非フォーカス・.statusBar レベル。
-// SwiftUI 側で scale + opacity の spring アニメ、frame 変更は AppKit の animator() に任せる。
+// 設計方針:
+// - NSPanel は全スクリーン union を覆う透明オーバーレイとして常時 visible に保つ。
+//   NSWindow.animator().setFrame で window 自身の frame を動かす方式は連続呼出時に
+//   AppKit 側のアニメ状態が不安定になるため使わない。
+// - 中の矩形（rect）を SwiftUI の @Published + withAnimation で補間する。
+// - rect / isVisible のアニメは ConfigManager.animation_duration の有限時間 easeOut に揃え、
+//   autoHide のタイミングをスライド完走と一致させる。spring は terminate 時刻が不確定で
+//   スライドが終わる前に hide() が走るとフェード中もスライドが続いてしまうため使わない
 @MainActor
 final class PreviewWindow {
     static let shared = PreviewWindow()
 
     private var panel: NSPanel?
     private var hostingView: NSHostingView<PreviewView>?
-    private var state = PreviewState()
-    private var hideWorkItem: DispatchWorkItem?
+    private let viewModel = PreviewViewModel()
+    private var autoHideWorkItem: DispatchWorkItem?
 
     private init() {}
 
-    // 指定 frame の位置にプレビューを表示する。引数は NSScreen 座標
-    func show(at frame: CGRect) {
-        // アニメーション無効時はそもそも何もしない
+    // 現在の config から有限時間の easing を作る。
+    // ここで使う duration が autoHideAfter とも揃うことで、スライド完走 → 即 hide が
+    // 確定的なタイムラインとして組める
+    private var slideAnim: Animation {
+        Anim.snapSlide(duration: ConfigManager.shared.current.general.animationDuration)
+    }
+
+    // 指定 frame の位置にプレビューを表示する。引数は NSScreen グローバル座標。
+    // from が指定されていれば、非表示状態からの初回出現を from→target のスライドで表現する。
+    // 既に表示中なら from は無視して現在位置から target へ補間する。
+    // autoHideAfter > 0 のときは指定秒後に自動 hide。連打時は前の自動 hide をキャンセル
+    func show(at frame: CGRect, from startFrame: CGRect? = nil, autoHideAfter: TimeInterval = 0) {
         guard ConfigManager.shared.current.general.animationEnabled else { return }
-
         ensurePanel()
-        guard let panel else { return }
 
-        hideWorkItem?.cancel()
+        autoHideWorkItem?.cancel()
 
-        if panel.isVisible {
-            // 既に表示中ならフレーム遷移を AppKit のアニメで補間
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = ConfigManager.shared.current.general.animationDuration
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                panel.animator().setFrame(frame, display: true)
+        let anim = slideAnim
+
+        if viewModel.isVisible {
+            // 表示中: 現在の rect から target へ補間
+            withAnimation(anim) {
+                viewModel.rect = frame
             }
         } else {
-            // 初回表示。少し小さい位置からフェードイン感を出すため frame をセットしてから order
-            panel.setFrame(frame, display: false)
-            panel.orderFrontRegardless()
-        }
-
-        // SwiftUI 側のフラグを立てて scale + opacity アニメ
-        state.isVisible = true
-    }
-
-    // プレビューを隠す
-    func hide() {
-        guard panel != nil else { return }
-        state.isVisible = false
-        // フェードアウト分の時間を待ってから window を閉じる
-        let item = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated {
-                self?.panel?.orderOut(nil)
+            // 非表示状態: まず from（指定無ければ target）に瞬間配置 → 次の runloop で target へ補間。
+            // 1 段階目を transaction(disablesAnimations) で囲むことで、startFrame への
+            // 配置はアニメーションさせない
+            let start = startFrame ?? frame
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                viewModel.rect = start
+            }
+            withAnimation(anim) {
+                viewModel.isVisible = true
+            }
+            // 次の runloop tick で target へ。start が一度 render された後の差分が
+            // withAnimation で補間されるため、見た目は from→target のスライドになる
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                withAnimation(self.slideAnim) {
+                    self.viewModel.rect = frame
+                }
             }
         }
-        hideWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: item)
+
+        if autoHideAfter > 0 {
+            let item = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated { self?.hide() }
+            }
+            autoHideWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + autoHideAfter, execute: item)
+        }
     }
 
-    // 必要に応じて NSPanel を生成する
+    // プレビューを隠す（.transition で scale + opacity をフェード）。
+    // パネル自体は order out しない。次回 show 時のレスポンスを保つため
+    func hide() {
+        autoHideWorkItem?.cancel()
+        withAnimation(slideAnim) {
+            viewModel.isVisible = false
+        }
+    }
+
+    // 必要に応じて NSPanel を生成し、全スクリーン union を覆って常時表示する
     private func ensurePanel() {
         if panel != nil { return }
 
-        let view = PreviewView(isVisible: false)
-        let host = NSHostingView(rootView: view)
-        hostingView = host
+        let overlay = Self.overlayFrame()
 
         let panel = NSPanel(
-            contentRect: .zero,
+            contentRect: overlay,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -78,21 +107,29 @@ final class PreviewWindow {
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = false
-        panel.contentView = host
 
-        // 状態オブジェクトの変化を受けて hosting の rootView を更新する
-        state.binding = { [weak self] visible in
-            self?.hostingView?.rootView = PreviewView(isVisible: visible)
-        }
+        let view = PreviewView(viewModel: viewModel, overlayFrameInScreen: overlay)
+        let host = NSHostingView(rootView: view)
+        host.frame = NSRect(origin: .zero, size: overlay.size)
+        host.autoresizingMask = [.width, .height]
+        panel.contentView = host
+        hostingView = host
+
+        panel.setFrame(overlay, display: false)
+        panel.orderFrontRegardless()
 
         self.panel = panel
     }
 
-    // SwiftUI に直接 ObservableObject を渡さず、コールバックで再描画させるためのシム
-    private struct PreviewState {
-        var isVisible: Bool = false {
-            didSet { binding?(isVisible) }
-        }
-        var binding: ((Bool) -> Void)?
+    // 全 NSScreen を union したオーバーレイ frame（NSScreen グローバル座標）
+    private static func overlayFrame() -> CGRect {
+        NSScreen.screens.reduce(CGRect.null) { acc, screen in acc.union(screen.frame) }
     }
+}
+
+// View に渡す状態。@Published で SwiftUI が変化に反応する
+@MainActor
+final class PreviewViewModel: ObservableObject {
+    @Published var rect: CGRect = .zero
+    @Published var isVisible: Bool = false
 }

@@ -102,18 +102,20 @@ enum WindowController {
         let padding = CGFloat(ConfigManager.shared.current.general.padding)
         let nsRect = compute(screen, padding)
 
-        // プレビューを表示してから実ウィンドウを更新する（Phase 4）
-        PreviewWindow.shared.show(at: nsRect)
+        // 1 回目（パネル非表示）でも現ウィンドウからスライドさせるため
+        // 現在の AX frame を NSScreen 座標に直して from として渡す
+        let fromNS: CGRect? = AccessibilityClient.getFrame(target.window)
+            .map { NSScreen.convertFromAX($0) }
+
+        // プレビューを表示してから実ウィンドウを更新する（Phase 4）。
+        // autoHideAfter はスライドアニメ duration と一致させ、スライド完走と同時に
+        // フェード退出が始まるようにする。これでスライド中にフェードが先取りされる
+        // 「フェード中スライド」現象を消す
+        let animDur = ConfigManager.shared.current.general.animationDuration
+        PreviewWindow.shared.show(at: nsRect, from: fromNS, autoHideAfter: animDur)
 
         let axRect = NSScreen.convertToAX(nsRect)
         applyFrame(axRect, to: target)
-
-        // 少し遅らせてプレビューをフェードアウト
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            MainActor.assumeIsolated {
-                PreviewWindow.shared.hide()
-            }
-        }
     }
 
     // AXEnhancedUserInterface を活用しつつ frame を適用する

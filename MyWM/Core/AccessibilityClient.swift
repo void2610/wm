@@ -103,8 +103,17 @@ enum AccessibilityClient {
         return AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, value) == .success
     }
 
-    // ウィンドウの frame（位置 + サイズ）をまとめてセットする
+    // ウィンドウの frame（位置 + サイズ）をまとめてセットする。
+    // size → position → size の順で 2 回 size をセットする：
+    // - 1 回目の setSize で先にウィンドウを縮めておくと、その後の setPosition が
+    //   画面端でクランプされず確実に目標位置に動く。
+    // - 2 回目の setSize は、setPosition の副作用で size が変わるアプリへの保険。
+    // 例: 「上半分（全幅 × 半高）→ 右半分（半幅 × 全高）」のケースで、
+    // position → size の順だと 1 回目の setPosition が全幅状態のままなので
+    // 右にはみ出してクランプされ、結果として左半分になってしまう。
+    // size を先に縮めれば setPosition がクランプされない。
     static func setFrame(_ window: AXUIElement, _ frame: CGRect) {
+        setSize(window, frame.size)
         setPosition(window, frame.origin)
         setSize(window, frame.size)
     }
@@ -137,9 +146,12 @@ enum AccessibilityClient {
 
     // MARK: - AXEnhancedUserInterface
 
-    // AXEnhancedUserInterface を ON にして frame をセットし、OFF に戻す。
-    // Electron / Firefox / Notion 等で連続リサイズのカクつきが改善する。
-    // 除外したい bundle id があれば skipEnhancedFor に渡す
+    // ウィンドウの frame をセットする（アプリ向け）。
+    // 旧版では AXEnhancedUserInterface を ON にして連続リサイズのカクつきを抑える
+    // 設計だったが、ON 中に setSize / setPosition を複数回呼ぶとアプリ側でバッチ化
+    // されて順序が崩れる症状（上半分→右半分のときに高さが halfH のまま下半分に
+    // 降りる、等）があったため、現状は使用しない。スムージングは後日 opt-in で再導入する。
+    // 引数の skipEnhancedFor / excluded は将来のために残してあるが現状未使用。
     static func setFrameSmoothing(
         window: AXUIElement,
         app: AXUIElement,
@@ -147,19 +159,9 @@ enum AccessibilityClient {
         skipEnhancedFor bundleId: String? = nil,
         excluded: Set<String> = []
     ) {
-        let shouldEnhance: Bool = {
-            if let id = bundleId, excluded.contains(id) { return false }
-            return true
-        }()
-
-        if shouldEnhance {
-            AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
-        }
-        defer {
-            if shouldEnhance {
-                AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse)
-            }
-        }
+        _ = app
+        _ = bundleId
+        _ = excluded
         setFrame(window, frame)
     }
 }
