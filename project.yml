@@ -46,7 +46,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundlePackageType: APPL
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
-        LSUIElement: true
+        # LSUIElement は使わない。NSApp.setActivationPolicy(.accessory) を applicationDidFinishLaunching で呼ぶ方針。
+        # LSUIElement=YES だと SwiftUI のシーン初期化が壊れて NSStatusItem が出ない症状が出る
         NSHumanReadableCopyright: ""
         NSAccessibilityUsageDescription: "ウィンドウを移動・リサイズするためにアクセシビリティ権限が必要です。"
         NSAppleEventsUsageDescription: "他アプリの操作を行うために必要です。"

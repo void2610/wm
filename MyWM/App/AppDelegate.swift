@@ -14,6 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Dock アイコンを出さず menu bar 常駐にする。LSUIElement は使わずここで設定する
+        NSApp.setActivationPolicy(.accessory)
+
         // 起動と同時に menu bar item を出す。権限が無くてもアイコンは表示する
         setupStatusItem()
 
