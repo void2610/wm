@@ -53,6 +53,16 @@ xattr -dr com.apple.quarantine /Applications/MyWM.app
 
 もしくは Finder で `MyWM.app` を右クリック → 開く → 警告ダイアログから「開く」。
 
+### 権限が認識されない場合
+
+未署名ビルドは CI run ごとに code signature が変わるため、System Settings > プライバシーとセキュリティ > アクセシビリティ に登録済みの permission entry と一致しないことがあります。次の手順で解決します:
+
+1. システム設定の同セクションで MyWM 行を選択 → 「-」で削除
+2. `MyWM.app` を同セクションへドラッグして追加し直す（チェックは ON のまま）
+3. MyWM を再起動（Onboarding 画面の「MyWM を再起動」ボタンか、メニューバー → 終了 → 再度開く）
+
+それでも進まない場合、Onboarding の「再チェック」ボタン、もしくは `xattr -dr com.apple.quarantine` の再実行を試してください。
+
 ## 設定例
 
 `~/.config/mywm/config.toml`:

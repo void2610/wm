@@ -8,12 +8,18 @@ enum AccessibilityClient {
 
     // MARK: - 権限
 
-    // アクセシビリティ権限の状態をチェックする。prompt = true で初回プロンプトを出す
+    // アクセシビリティ権限の状態をチェックする。prompt = true で初回プロンプトを出す。
+    // ポーリングで使う通常チェックは AXIsProcessTrusted() を直接呼ぶ。
+    // AXIsProcessTrustedWithOptions(prompt:false) はプロセス内で値がキャッシュされる
+    // ケースがあり、許可後も false を返し続けることがあるため初回プロンプト時のみ使う。
     static func isTrusted(prompt: Bool = false) -> Bool {
-        let options: CFDictionary = [
-            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: prompt
-        ] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
+        if prompt {
+            let options: CFDictionary = [
+                kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
+            ] as CFDictionary
+            return AXIsProcessTrustedWithOptions(options)
+        }
+        return AXIsProcessTrusted()
     }
 
     // MARK: - アプリ / ウィンドウ取得
