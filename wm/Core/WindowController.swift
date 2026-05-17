@@ -18,8 +18,12 @@ enum WindowController {
         snap { screen, padding in screen.rightHalf(padding: padding) }
     }
 
+    // 上半分にある状態でもう一度上を入力すると全画面に巡回する
     static func snapToTopHalf() {
-        snap { screen, padding in screen.topHalf(padding: padding) }
+        snap(
+            { screen, padding in screen.topHalf(padding: padding) },
+            cycleTo: { screen, padding in screen.paddedVisibleFrame(padding: padding) }
+        )
     }
 
     static func snapToBottomHalf() {
@@ -95,17 +99,33 @@ enum WindowController {
         return NSScreen.containingAX(point: centerAX)
     }
 
-    // snap 系の共通処理。compute は NSScreen 座標で目標枠を返すクロージャ
-    private static func snap(_ compute: (NSScreen, CGFloat) -> CGRect) {
+    // snap 系の共通処理。compute は NSScreen 座標で目標枠を返すクロージャ。
+    // cycleTo が指定されていて、現ウィンドウが compute の結果と一致している場合は
+    // 代わりに cycleTo の結果へ巡回する（例: 上半分の状態で再度上を入力 → 最大化）
+    private static func snap(
+        _ compute: (NSScreen, CGFloat) -> CGRect,
+        cycleTo: ((NSScreen, CGFloat) -> CGRect)? = nil
+    ) {
         guard let target = focusedTarget() else { return }
         let screen = currentScreen(of: target.window)
         let padding = CGFloat(ConfigManager.shared.current.general.padding)
-        let nsRect = compute(screen, padding)
+        let primaryRect = compute(screen, padding)
 
-        // 1 回目（パネル非表示）でも現ウィンドウからスライドさせるため
-        // 現在の AX frame を NSScreen 座標に直して from として渡す
-        let fromNS: CGRect? = AccessibilityClient.getFrame(target.window)
+        // 現ウィンドウの NSScreen 座標 frame。slide の起点としても、巡回判定にも使う
+        let currentNS: CGRect? = AccessibilityClient.getFrame(target.window)
             .map { NSScreen.convertFromAX($0) }
+
+        // 既に primary と一致していて cycleTo が指定されていれば、巡回先を採用する
+        let nsRect: CGRect = {
+            if let cycle = cycleTo,
+               let cur = currentNS,
+               Self.framesMatch(cur, primaryRect) {
+                return cycle(screen, padding)
+            }
+            return primaryRect
+        }()
+
+        let fromNS: CGRect? = currentNS
 
         // プレビューを表示してから実ウィンドウを更新する（Phase 4）。
         // autoHideAfter はスライドアニメ duration と一致させ、スライド完走と同時に
@@ -116,6 +136,15 @@ enum WindowController {
 
         let axRect = NSScreen.convertToAX(nsRect)
         applyFrame(axRect, to: target)
+    }
+
+    // 2 つの frame がほぼ一致しているか。AX 値の丸めやアプリ側のサイズ制約で
+    // 数 px ずれることがあるため、広めの tolerance を持たせる
+    private static func framesMatch(_ a: CGRect, _ b: CGRect, tolerance: CGFloat = 5.0) -> Bool {
+        abs(a.minX - b.minX) < tolerance &&
+        abs(a.minY - b.minY) < tolerance &&
+        abs(a.width - b.width) < tolerance &&
+        abs(a.height - b.height) < tolerance
     }
 
     // AXEnhancedUserInterface を活用しつつ frame を適用する
