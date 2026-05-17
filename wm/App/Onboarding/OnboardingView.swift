@@ -15,7 +15,7 @@ struct OnboardingView: View {
                 .font(.title2)
                 .bold()
 
-            Text("MyWM はキーボードからウィンドウを移動・リサイズするためにアクセシビリティ権限を必要とします。\nシステム設定で MyWM にチェックを入れると自動的に進みます。")
+            Text("wm はキーボードからウィンドウを移動・リサイズするためにアクセシビリティ権限を必要とします。\nシステム設定で wm にチェックを入れると自動的に進みます。")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

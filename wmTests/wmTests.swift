@@ -1,7 +1,7 @@
 import XCTest
-@testable import MyWM
+@testable import wm
 
-final class MyWMTests: XCTestCase {
+final class wmTests: XCTestCase {
     // Phase 0 用のスモークテスト。ターゲットがリンクできることを確認する
     func testSmoke() {
         XCTAssertTrue(true)

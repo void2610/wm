@@ -18,7 +18,7 @@ enum AppWindows {
         let view = SettingsView()
         let host = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: host)
-        window.title = "MyWM 設定"
+        window.title = "wm 設定"
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.setContentSize(NSSize(width: 560, height: 420))
         window.center()
@@ -38,7 +38,7 @@ enum AppWindows {
         let view = OnboardingView(monitor: monitor)
         let host = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: host)
-        window.title = "MyWM のセットアップ"
+        window.title = "wm のセットアップ"
         window.styleMask = [.titled, .closable]
         window.center()
         let controller = NSWindowController(window: window)

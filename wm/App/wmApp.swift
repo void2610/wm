@@ -6,7 +6,7 @@ import SwiftUI
 // 出現直後に hide する（LSUIElement=YES でも WindowGroup の初期ウィンドウは
 // 一瞬出ようとするため明示的に close する）。
 @main
-struct MyWMApp: App {
+struct wmApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {

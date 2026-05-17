@@ -26,7 +26,7 @@ final class ConfigManager {
             base = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".config")
         }
-        return base.appendingPathComponent("mywm").appendingPathComponent("config.toml")
+        return base.appendingPathComponent("wm").appendingPathComponent("config.toml")
     }
 
     private var fileSource: DispatchSourceFileSystemObject?

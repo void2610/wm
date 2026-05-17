@@ -1,7 +1,7 @@
 import Foundation
 
 // ホットキー → アクション の中継層。Command パターンで疎結合にしておき、
-// CLI 連携（mywm focus left など）が来てもここで集約できるようにする。
+// CLI 連携（wm focus left など）が来てもここで集約できるようにする。
 enum Action: Equatable {
     case focus(FocusNavigator.Direction)
     case snapLeft, snapRight, snapTop, snapBottom

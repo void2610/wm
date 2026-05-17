@@ -1,8 +1,8 @@
 import OSLog
 
-// OSLog の薄いラッパー。Console.app で `subsystem == "com.void2610.MyWM"` で絞り込める
+// OSLog の薄いラッパー。Console.app で `subsystem == "com.void2610.wm"` で絞り込める
 enum Log {
-    private static let subsystem = "com.void2610.MyWM"
+    private static let subsystem = "com.void2610.wm"
 
     static let app = Logger(subsystem: subsystem, category: "app")
     static let accessibility = Logger(subsystem: subsystem, category: "accessibility")

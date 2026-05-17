@@ -1,5 +1,5 @@
-# MyWM デフォルト設定ファイル
-# このファイルは初回起動時に ~/.config/mywm/config.toml にコピーされる。
+# wm デフォルト設定ファイル
+# このファイルは初回起動時に ~/.config/wm/config.toml にコピーされる。
 # モディファイア表記: cmd, opt, ctrl, shift
 
 [general]

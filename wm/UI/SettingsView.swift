@@ -13,7 +13,7 @@ struct SettingsView: View {
             hotkeysTab
                 .tabItem { Label("ホットキー", systemImage: "command") }
             aboutTab
-                .tabItem { Label("MyWM について", systemImage: "info.circle") }
+                .tabItem { Label("wm について", systemImage: "info.circle") }
         }
         .frame(width: 560, height: 420)
         .onAppear {
@@ -81,7 +81,7 @@ struct SettingsView: View {
         VStack(spacing: 12) {
             Image(systemName: "rectangle.split.2x1")
                 .font(.system(size: 56))
-            Text("MyWM")
+            Text("wm")
                 .font(.title)
                 .bold()
             Text("macOS 向けキーボード中心のウィンドウマネージャー")

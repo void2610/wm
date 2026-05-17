@@ -51,14 +51,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             // SF Symbol。テンプレートとして扱わせるとダーク／ライトで自動反転される
-            let image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: "MyWM")
+            let image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: "wm")
             image?.isTemplate = true
             button.image = image
             // 万一 image が nil でも見えるように title をフォールバックで設定
             if image == nil {
-                button.title = "MyWM"
+                button.title = "wm"
             }
-            button.toolTip = "MyWM"
+            button.toolTip = "wm"
         }
         item.menu = buildMenu()
         statusItem = item
@@ -107,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
 
         let quit = NSMenuItem(
-            title: "MyWM を終了",
+            title: "wm を終了",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
