@@ -129,4 +129,4 @@ bundle_id = "com.googlecode.iterm2"
 
 ## ライセンス
 
-未定。
+[MIT License](./LICENSE)
