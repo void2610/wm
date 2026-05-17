@@ -45,23 +45,9 @@ main へ push するたびに [GitHub Actions](https://github.com/void2610/wm/ac
 2. 下部 *Artifacts* セクションの `MyWM-<short-sha>` をダウンロード
 3. zip を展開 → `MyWM.app` を `/Applications` などに配置
 
-未署名バイナリのため、初回起動時に Gatekeeper にブロックされます。回避方法:
+Ad-hoc 署名された .app ですが Developer ID 署名ではないため、初回起動時に Gatekeeper の警告が出ます。Finder で `MyWM.app` を右クリック → 開く → 警告ダイアログから「開く」で起動できます。
 
-```sh
-xattr -dr com.apple.quarantine /Applications/MyWM.app
-```
-
-もしくは Finder で `MyWM.app` を右クリック → 開く → 警告ダイアログから「開く」。
-
-### 権限が認識されない場合
-
-未署名ビルドは CI run ごとに code signature が変わるため、System Settings > プライバシーとセキュリティ > アクセシビリティ に登録済みの permission entry と一致しないことがあります。次の手順で解決します:
-
-1. システム設定の同セクションで MyWM 行を選択 → 「-」で削除
-2. `MyWM.app` を同セクションへドラッグして追加し直す（チェックは ON のまま）
-3. MyWM を再起動（Onboarding 画面の「MyWM を再起動」ボタンか、メニューバー → 終了 → 再度開く）
-
-それでも進まない場合、Onboarding の「再チェック」ボタン、もしくは `xattr -dr com.apple.quarantine` の再実行を試してください。
+起動するとアクセシビリティ権限の案内ウィンドウが出るので、システム設定 > プライバシーとセキュリティ > アクセシビリティ で MyWM を ON にしてください。1〜2 秒で自動的にメニューバーアプリに切り替わります。
 
 ## 設定例
 

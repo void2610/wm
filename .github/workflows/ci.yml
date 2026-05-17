@@ -58,16 +58,31 @@ jobs:
       - name: Build (Release)
         run: |
           set -o pipefail
+          # CODE_SIGNING_ALLOWED=NO を付けると本当に未署名で出てしまい、
+          # quarantine 付き起動時に App Translocation の対象になる。
+          # ここでは Developer ID は無いので "-" (ad-hoc) を明示して署名させる。
           xcodebuild \
             -project MyWM.xcodeproj \
             -scheme MyWM \
             -configuration Release \
             -destination "platform=macOS" \
             -derivedDataPath build \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM="" \
             build
+
+      - name: Re-sign ad-hoc (deep) and verify
+        run: |
+          set -e
+          APP_PATH="build/Build/Products/Release/MyWM.app"
+          # 念のため bundle 全体を ad-hoc 再署名し、frameworks も一括で署名する。
+          # ad-hoc 署名されていれば quarantine 付きでも translocation されない。
+          codesign --force --deep --sign - "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          codesign -dv --verbose=4 "$APP_PATH" 2>&1 | head -20
 
       - name: Package .app
         id: package
