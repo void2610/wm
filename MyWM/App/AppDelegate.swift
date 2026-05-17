@@ -1,10 +1,9 @@
 import AppKit
 
 // NSApplicationDelegate。アプリ起動時のオーケストレーションを行う。
-// - LSUIElement=YES なので常に accessory として起動する。
-//   ActivationPolicy を後から切り替えると SwiftUI の MenuBarExtra が
-//   インストールされなくなるため、policy はいじらない方針。
-// - Menu bar item は NSStatusItem を直接生成して保持する
+// - Info.plist の LSUIElement=YES で Dock 非表示の accessory アプリとして起動する。
+//   ActivationPolicy をランタイムで切り替えると Dock に一瞬出るので避ける。
+// - Menu bar item は NSStatusItem を直接生成して保持する（MenuBarExtra は使わない）
 // - 権限未許可時は Onboarding ウィンドウを NSApp.activate で前面化する
 // - 権限取得後に ConfigManager と HotkeyManager を起動
 @MainActor
@@ -14,9 +13,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Dock アイコンを出さず menu bar 常駐にする。LSUIElement は使わずここで設定する
-        NSApp.setActivationPolicy(.accessory)
-
         // 起動と同時に menu bar item を出す。権限が無くてもアイコンは表示する
         setupStatusItem()
 

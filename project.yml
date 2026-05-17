@@ -46,8 +46,10 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundlePackageType: APPL
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
-        # LSUIElement は使わない。NSApp.setActivationPolicy(.accessory) を applicationDidFinishLaunching で呼ぶ方針。
-        # LSUIElement=YES だと SwiftUI のシーン初期化が壊れて NSStatusItem が出ない症状が出る
+        # Dock 非表示にするため LSUIElement=YES。menu bar item は AppDelegate で
+        # NSStatusItem を直接生成しているので、MenuBarExtra/Settings を使わない構成では
+        # LSUIElement=YES でも問題なくアイコンが出る。
+        LSUIElement: true
         NSHumanReadableCopyright: ""
         NSAccessibilityUsageDescription: "ウィンドウを移動・リサイズするためにアクセシビリティ権限が必要です。"
         NSAppleEventsUsageDescription: "他アプリの操作を行うために必要です。"

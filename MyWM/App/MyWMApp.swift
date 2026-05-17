@@ -1,11 +1,10 @@
 import SwiftUI
 
 // アプリのエントリポイント。Dock は出さずに menu bar に常駐する。
-// Info.plist の LSUIElement は使わない（SwiftUI のシーン初期化が壊れて NSStatusItem が
-// 表示されなくなる症状が出るため）。代わりに AppDelegate 側で
-// NSApp.setActivationPolicy(.accessory) を呼んで Dock を非表示にする。
+// Info.plist の LSUIElement=YES で accessory として起動する。
 // SwiftUI のライフサイクル維持のためにダミーの WindowGroup を 1 つ持ち、
-// 出現直後に hide する。
+// 出現直後に hide する（LSUIElement=YES でも WindowGroup の初期ウィンドウは
+// 一瞬出ようとするため明示的に close する）。
 @main
 struct MyWMApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
