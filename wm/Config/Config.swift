@@ -47,13 +47,17 @@ struct Config: Codable, Equatable {
         }
     }
 
+    // bundle_id 指定の .app 起動と、path 指定の任意実行ファイル起動の両方を受け付ける。
+    // どちらか片方が必須。両方指定された場合は bundle_id が優先される
     struct Launch: Codable, Equatable {
         var key: String
-        var bundleId: String
+        var bundleId: String?
+        var path: String?
 
         enum CodingKeys: String, CodingKey {
             case key
             case bundleId = "bundle_id"
+            case path
         }
     }
 }

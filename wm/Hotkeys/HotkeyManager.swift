@@ -46,7 +46,16 @@ final class HotkeyManager {
         }
 
         for (index, launch) in config.launch.enumerated() {
-            let action = Action.launchApp(bundleId: launch.bundleId)
+            // bundle_id が指定されていれば .app 起動、なければ path 起動
+            let action: Action
+            if let bundleId = launch.bundleId, !bundleId.isEmpty {
+                action = .launchApp(bundleId: bundleId)
+            } else if let path = launch.path, !path.isEmpty {
+                action = .launchPath(path: path)
+            } else {
+                Log.hotkey.warning("launch エントリに bundle_id / path のどちらも指定されていません: \(launch.key)")
+                continue
+            }
             register(name: "launch_\(index)", shortcutString: launch.key, action: action)
         }
 

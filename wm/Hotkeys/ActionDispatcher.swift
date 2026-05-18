@@ -7,6 +7,7 @@ enum Action: Equatable {
     case snapLeft, snapRight, snapTop, snapBottom
     case maximize, center, toggleFullscreen
     case launchApp(bundleId: String)
+    case launchPath(path: String)
 }
 
 @MainActor
@@ -31,6 +32,8 @@ enum ActionDispatcher {
             WindowController.toggleFullscreen()
         case .launchApp(let bundleId):
             AppLauncher.launch(bundleId: bundleId)
+        case .launchPath(let path):
+            AppLauncher.launch(path: path)
         }
     }
 }
