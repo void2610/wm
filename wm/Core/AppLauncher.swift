@@ -51,7 +51,19 @@ enum AppLauncher {
             return
         }
 
-        // それ以外の実行ファイルは Process で起動
+        // 起動済みの同実行ファイルがあれば activate する。
+        // bundle id を持たないので executableURL の実体パスでマッチング判定する
+        let resolvedTarget = url.resolvingSymlinksInPath().path
+        if let running = NSWorkspace.shared.runningApplications.first(where: { app in
+            guard let exe = app.executableURL?.resolvingSymlinksInPath().path else { return false }
+            return exe == resolvedTarget
+        }) {
+            running.activate(options: [.activateIgnoringOtherApps])
+            Log.app.info("起動済み実行ファイルを activate: \(expanded)")
+            return
+        }
+
+        // 未起動なら Process で起動
         let process = Process()
         process.executableURL = url
         do {
