@@ -1,10 +1,10 @@
 import AppKit
 
 // NSApplicationDelegate。アプリ起動時のオーケストレーションを行う。
-// - Info.plist の LSUIElement=YES で Dock 非表示の accessory アプリとして起動する。
-//   ActivationPolicy をランタイムで切り替えると Dock に一瞬出るので避ける。
+// - Info.plist の LSUIElement=YES + 起動時の setActivationPolicy(.accessory) で
+//   Dock 非表示の accessory アプリにする。Settings/Onboarding 用のウィンドウは
+//   NSPanel(nonactivatingPanel) を使うので NSApp.activate も呼ばない。
 // - Menu bar item は NSStatusItem を直接生成して保持する（MenuBarExtra は使わない）
-// - 権限未許可時は Onboarding ウィンドウを NSApp.activate で前面化する
 // - 権限取得後に ConfigManager と HotkeyManager を起動
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -13,6 +13,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // SwiftUI App + WindowGroup などで accessory policy が上書きされてしまう
+        // ケースに備えて、明示的に .accessory を再設定する。LSUIElement との二重で
+        // Dock アイコンの誤出現を防ぐ
+        NSApp.setActivationPolicy(.accessory)
+
         // 起動と同時に menu bar item を出す。権限が無くてもアイコンは表示する
         setupStatusItem()
 
@@ -25,7 +30,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if AccessibilityClient.isTrusted() {
             bootstrapAfterPermission()
         } else {
-            NSApp.activate(ignoringOtherApps: true)
             AppWindows.showOnboarding(monitor: permissionMonitor)
             PermissionMonitor.requestPrompt()
             permissionMonitor.start()

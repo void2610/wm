@@ -4,7 +4,10 @@ import Combine
 
 // スナップ先を予告する半透明ウィンドウ。
 // 設計方針:
-// - NSPanel は全スクリーン union を覆う透明オーバーレイとして常時 visible に保つ。
+// - NSPanel は visibleFrame の union を覆う透明オーバーレイ。show のときだけ
+//   orderFrontRegardless し、フェード完了後に orderOut する。常時 visible で
+//   画面上に存在させると、透明・mouseEvents 無視であってもシステムの Dock
+//   自動非表示が抑制されて Dock が出っぱなしになるため。
 //   NSWindow.animator().setFrame で window 自身の frame を動かす方式は連続呼出時に
 //   AppKit 側のアニメ状態が不安定になるため使わない。
 // - 中の矩形（rect）を SwiftUI の @Published + withAnimation で補間する。
@@ -19,6 +22,9 @@ final class PreviewWindow {
     private var hostingView: NSHostingView<PreviewView>?
     private let viewModel = PreviewViewModel()
     private var autoHideWorkItem: DispatchWorkItem?
+    // フェード退出完了後に panel を orderOut するためのワークアイテム。
+    // 次回 show のときに必ずキャンセルする
+    private var orderOutWorkItem: DispatchWorkItem?
 
     private init() {}
 
@@ -38,6 +44,11 @@ final class PreviewWindow {
         ensurePanel()
 
         autoHideWorkItem?.cancel()
+        // 前回の hide で予約された orderOut を取り消し、orderOut 状態なら今すぐ前面化
+        orderOutWorkItem?.cancel()
+        if let panel = panel, !panel.isVisible {
+            panel.orderFrontRegardless()
+        }
 
         let anim = slideAnim
 
@@ -78,16 +89,25 @@ final class PreviewWindow {
         }
     }
 
-    // プレビューを隠す（.transition で scale + opacity をフェード）。
-    // パネル自体は order out しない。次回 show 時のレスポンスを保つため
+    // プレビューを隠す（フェードアウト → 完了後に panel を orderOut）。
+    // orderOut しないと panel が常時画面上に居続け、システムの Dock 自動非表示が
+    // 抑制されてしまう
     func hide() {
         autoHideWorkItem?.cancel()
+        let dur = ConfigManager.shared.current.general.animationDuration
         withAnimation(slideAnim) {
             viewModel.isVisible = false
         }
+        // フェード完了後に panel を画面から外す
+        let item = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.panel?.orderOut(nil) }
+        }
+        orderOutWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + dur, execute: item)
     }
 
-    // 必要に応じて NSPanel を生成し、全スクリーン union を覆って常時表示する
+    // 必要に応じて NSPanel を生成する。生成しただけでは画面に出さない。
+    // 実際の表示は show() の orderFrontRegardless で行う
     private func ensurePanel() {
         if panel != nil { return }
 
@@ -116,14 +136,18 @@ final class PreviewWindow {
         hostingView = host
 
         panel.setFrame(overlay, display: false)
-        panel.orderFrontRegardless()
+        // ここでは orderFront しない。show() で必要なときに前面化する。
+        // 常時 visible だと透明・mouseEvents 無視でもシステムの Dock 自動非表示が
+        // 抑制されて Dock が出っぱなしになるため
 
         self.panel = panel
     }
 
-    // 全 NSScreen を union したオーバーレイ frame（NSScreen グローバル座標）
+    // 全 NSScreen の visibleFrame を union したオーバーレイ frame（NSScreen グローバル座標）。
+    // screen.frame ではなく visibleFrame を使うことで Dock とメニューバー領域には
+    // 被せず、Dock の自動非表示が機能するようにする
     private static func overlayFrame() -> CGRect {
-        NSScreen.screens.reduce(CGRect.null) { acc, screen in acc.union(screen.frame) }
+        NSScreen.screens.reduce(CGRect.null) { acc, screen in acc.union(screen.visibleFrame) }
     }
 }
 
