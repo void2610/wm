@@ -26,6 +26,12 @@ maximize    = "cmd+ctrl+return"
 center      = "cmd+ctrl+c"
 
 # アプリ起動ホットキーの例
+# bundle_id を指定すると LaunchServices 経由で .app を起動・activate する
 # [[launch]]
 # key = "cmd+shift+1"
 # bundle_id = "com.apple.Safari"
+
+# path を指定すると任意の実行ファイル / .app を直接起動できる (~/ も解釈される)
+# [[launch]]
+# key = "cmd+shift+2"
+# path = "~/Documents/GitHub/melchior/build/melchior_main"
