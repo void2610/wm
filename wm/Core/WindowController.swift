@@ -64,22 +64,19 @@ enum WindowController {
         snap { screen, padding, _ in screen.paddedVisibleFrame(padding: padding) }
     }
 
-    // 現在のサイズを保ったまま画面中央に配置する
+    // 現在のサイズを保ったまま画面中央に配置する。
+    // snap 共通処理を経由することでスライド+フェードのプレビューアニメも出る
     static func center() {
-        guard let target = focusedTarget() else { return }
-        let screen = currentScreen(of: target.window)
-        guard let currentFrame = AccessibilityClient.getFrame(target.window) else { return }
-        // currentFrame は AX 座標なのでサイズだけ流用し、中心は visibleFrame から計算
-        let visibleAX = NSScreen.convertToAX(screen.visibleFrame)
-        let cx = visibleAX.midX
-        let cy = visibleAX.midY
-        let centered = CGRect(
-            x: cx - currentFrame.width / 2,
-            y: cy - currentFrame.height / 2,
-            width: currentFrame.width,
-            height: currentFrame.height
-        )
-        applyFrame(centered, to: target)
+        snap { screen, _, currentNS in
+            let visible = screen.visibleFrame
+            let size = currentNS?.size ?? .zero
+            return CGRect(
+                x: visible.midX - size.width / 2,
+                y: visible.midY - size.height / 2,
+                width: size.width,
+                height: size.height
+            )
+        }
     }
 
     // ネイティブのフルスクリーンをトグルする
