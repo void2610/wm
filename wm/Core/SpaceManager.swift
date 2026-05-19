@@ -89,7 +89,9 @@ enum SpaceManager {
         for d in displays {
             guard let spaces = d["Spaces"] as? [[String: Any]] else { continue }
             let ids = spaces.compactMap { $0["id64"] as? UInt64 }
-            Log.app.info("space cycle: display space ids=\(ids)")
+            // OSLog で配列を直に補間するとマスクされるため、各要素を joined した数値文字列で出す
+            let idsLog = ids.map { String($0) }.joined(separator: ",")
+            Log.app.info("space cycle: display ids=[\(idsLog)] count=\(ids.count)")
             guard let targetIdx = ids.firstIndex(of: targetSpaceID),
                   let focusedIdx = ids.firstIndex(of: focusedSpaceID) else { continue }
             let diff = targetIdx - focusedIdx
