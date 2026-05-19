@@ -203,9 +203,12 @@ enum WindowController {
             && bottomAligned(current, padded: padded)
     }
 
+    // 「半幅であること」を !rightAligned で要求する。これがないと「上半分（全幅）」が
+    // 左上 1/4 と誤判定され、snapToLeftHalf の巡回が「左上 → 左下」に飛んでしまう
     private static func isAtTopLeftQuarter(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
         let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
         return atLeftColumn(current, padded: padded)
+            && !rightAligned(current, padded: padded)
             && topAligned(current, padded: padded)
             && !bottomAligned(current, padded: padded)
     }
@@ -213,13 +216,17 @@ enum WindowController {
     private static func isAtBottomLeftQuarter(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
         let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
         return atLeftColumn(current, padded: padded)
+            && !rightAligned(current, padded: padded)
             && !topAligned(current, padded: padded)
             && bottomAligned(current, padded: padded)
     }
 
+    // 右 1/4 は !atLeftColumn で「全幅でない」ことを担保する（左カラムと右カラムは
+    // 半幅前提で互いに排他のため、これで十分）
     private static func isAtTopRightQuarter(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
         let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
         return atRightColumn(current, padded: padded, padding: padding)
+            && !atLeftColumn(current, padded: padded)
             && topAligned(current, padded: padded)
             && !bottomAligned(current, padded: padded)
     }
@@ -227,6 +234,7 @@ enum WindowController {
     private static func isAtBottomRightQuarter(_ current: CGRect, screen: NSScreen, padding: CGFloat) -> Bool {
         let padded = screen.visibleFrame.insetBy(dx: padding, dy: padding)
         return atRightColumn(current, padded: padded, padding: padding)
+            && !atLeftColumn(current, padded: padded)
             && !topAligned(current, padded: padded)
             && bottomAligned(current, padded: padded)
     }
