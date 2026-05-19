@@ -89,13 +89,14 @@ enum SpaceManager {
         for d in displays {
             guard let spaces = d["Spaces"] as? [[String: Any]] else { continue }
             let ids = spaces.compactMap { $0["id64"] as? UInt64 }
+            Log.app.info("space cycle: display space ids=\(ids)")
             guard let targetIdx = ids.firstIndex(of: targetSpaceID),
                   let focusedIdx = ids.firstIndex(of: focusedSpaceID) else { continue }
             let diff = targetIdx - focusedIdx
             guard diff != 0 else { return false }
             let direction = diff > 0 ? "right" : "left"
             let count = abs(diff)
-            Log.app.info("space cycle: AppleScript Ctrl+\(direction) x\(count)")
+            Log.app.info("space cycle: CGEvent diff=\(diff) focusedIdx=\(focusedIdx) targetIdx=\(targetIdx) ids.count=\(ids.count)")
             sendCtrlArrow(direction: direction, count: count)
             return true
         }
@@ -113,27 +114,25 @@ enum SpaceManager {
         return result.map { $0.uint64Value }
     }
 
-    // AppleScript で Mission Control の Ctrl+←/→ ショートカットを count 回発火する。
-    // NSAppleScript.executeAndReturnError をメインスレッドで同期実行すると、その間に
-    // ホットキー登録（KeyboardShortcuts ライブラリ）の runloop 状態が壊れ、それ以降
-    // 一切ホットキーが拾われなくなる症状が出るため、/usr/bin/osascript を別プロセスで
-    // 非同期に起動して回避する。System Events 経由なので「オートメーション」TCC 権限が必要
+    // Mission Control の Ctrl+←/→ ショートカットを CGEvent で count 回発火する。
+    // osascript 依存を避けて wm 自身からキーイベントを送出する。アクセシビリティ権限が
+    // あれば追加の TCC は不要
     private static func sendCtrlArrow(direction: String, count: Int) {
-        let keyCode = direction == "right" ? 124 : 123
-        let script = """
-        tell application "System Events"
-            repeat \(count) times
-                key code \(keyCode) using control down
-            end repeat
-        end tell
-        """
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        task.arguments = ["-e", script]
-        do {
-            try task.run()
-        } catch {
-            Log.app.error("space cycle: osascript 実行失敗 \(String(describing: error))")
+        let keyCode: CGKeyCode = direction == "right" ? 0x7C : 0x7B // 124=Right, 123=Left
+        let src = CGEventSource(stateID: .hidSystemState)
+        for i in 0..<count {
+            if i > 0 {
+                // 連続押下時に macOS がイベントを取りこぼさないよう少し間隔を空ける
+                Thread.sleep(forTimeInterval: 0.08)
+            }
+            if let down = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true) {
+                down.flags = .maskControl
+                down.post(tap: .cghidEventTap)
+            }
+            if let up = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: false) {
+                up.flags = .maskControl
+                up.post(tap: .cghidEventTap)
+            }
         }
     }
 }
