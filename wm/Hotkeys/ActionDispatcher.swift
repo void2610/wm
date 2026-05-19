@@ -13,6 +13,7 @@ enum Action: Equatable {
 @MainActor
 enum ActionDispatcher {
     static func dispatch(_ action: Action) {
+        Log.hotkey.info("dispatch: \(String(describing: action), privacy: .public)")
         switch action {
         case .focus(let dir):
             FocusNavigator.focus(dir)

@@ -70,6 +70,7 @@ final class HotkeyManager {
         }
         let name = KeyboardShortcuts.Name(nameString)
         KeyboardShortcuts.setShortcut(shortcut, for: name)
+        Log.hotkey.info("登録 \(nameString, privacy: .public) -> keyCode=\(shortcut.carbonKeyCode) mods=\(shortcut.carbonModifiers) action=\(String(describing: action), privacy: .public)")
         KeyboardShortcuts.onKeyDown(for: name) {
             // KeyboardShortcuts は main thread でハンドラを呼ぶ前提
             MainActor.assumeIsolated {
