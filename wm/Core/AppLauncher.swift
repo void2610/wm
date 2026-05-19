@@ -10,11 +10,18 @@ enum AppLauncher {
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
         if !running.isEmpty {
             // どれかのインスタンスが active なら巡回モード。
-            // 同一プロセス内の別ウィンドウ → 同 bundleId の別プロセスインスタンス の順で試す
+            // 同一 Space 内の別ウィンドウ → 別 Space のウィンドウ → 別プロセスインスタンスの順で試す
             if let activeIdx = running.firstIndex(where: { $0.isActive }) {
                 let activeApp = running[activeIdx]
-                if cycleToNextWindow(pid: activeApp.processIdentifier) {
+                let pid = activeApp.processIdentifier
+                if cycleToNextWindow(pid: pid) {
                     Log.app.info("同アプリ別ウィンドウへ巡回: \(bundleId)")
+                    return
+                }
+                let app = AXUIElementCreateApplication(pid)
+                let focused = AccessibilityClient.focusedWindow(of: app)
+                if SpaceManager.cycleToAnotherSpaceWindow(pid: pid, focusedWindow: focused) {
+                    Log.app.info("別 Space の同アプリウィンドウへ巡回: \(bundleId)")
                     return
                 }
                 if running.count >= 2 {
