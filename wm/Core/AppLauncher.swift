@@ -8,13 +8,23 @@ enum AppLauncher {
     // 既に対象アプリが frontmost のときは、同アプリ内の別ウィンドウへ巡回する
     static func launch(bundleId: String) {
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
-        if let app = running.first {
-            Log.app.info("launch(bundleId): \(bundleId) isActive=\(app.isActive) frontmost=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "nil")")
-            if app.isActive, cycleToNextWindow(pid: app.processIdentifier) {
-                Log.app.info("同アプリ別ウィンドウへ巡回: \(bundleId)")
-                return
+        if !running.isEmpty {
+            // どれかのインスタンスが active なら巡回モード。
+            // 同一プロセス内の別ウィンドウ → 同 bundleId の別プロセスインスタンス の順で試す
+            if let activeIdx = running.firstIndex(where: { $0.isActive }) {
+                let activeApp = running[activeIdx]
+                if cycleToNextWindow(pid: activeApp.processIdentifier) {
+                    Log.app.info("同アプリ別ウィンドウへ巡回: \(bundleId)")
+                    return
+                }
+                if running.count >= 2 {
+                    let nextIdx = (activeIdx + 1) % running.count
+                    running[nextIdx].activate(options: [.activateIgnoringOtherApps])
+                    Log.app.info("別プロセスインスタンスへ巡回: \(bundleId) (\(running[nextIdx].processIdentifier))")
+                    return
+                }
             }
-            app.activate(options: [.activateIgnoringOtherApps])
+            running[0].activate(options: [.activateIgnoringOtherApps])
             Log.app.info("起動済みアプリを activate: \(bundleId)")
             return
         }
@@ -59,16 +69,25 @@ enum AppLauncher {
         // 起動済みの同実行ファイルがあれば activate する。
         // bundle id を持たないので executableURL の実体パスでマッチング判定する
         let resolvedTarget = url.resolvingSymlinksInPath().path
-        if let running = NSWorkspace.shared.runningApplications.first(where: { app in
+        let matching = NSWorkspace.shared.runningApplications.filter { app in
             guard let exe = app.executableURL?.resolvingSymlinksInPath().path else { return false }
             return exe == resolvedTarget
-        }) {
-            Log.app.info("launch(path): \(expanded) isActive=\(running.isActive)")
-            if running.isActive, cycleToNextWindow(pid: running.processIdentifier) {
-                Log.app.info("同アプリ別ウィンドウへ巡回: \(expanded)")
-                return
+        }
+        if !matching.isEmpty {
+            if let activeIdx = matching.firstIndex(where: { $0.isActive }) {
+                let activeApp = matching[activeIdx]
+                if cycleToNextWindow(pid: activeApp.processIdentifier) {
+                    Log.app.info("同アプリ別ウィンドウへ巡回: \(expanded)")
+                    return
+                }
+                if matching.count >= 2 {
+                    let nextIdx = (activeIdx + 1) % matching.count
+                    matching[nextIdx].activate(options: [.activateIgnoringOtherApps])
+                    Log.app.info("別プロセスインスタンスへ巡回: \(expanded)")
+                    return
+                }
             }
-            running.activate(options: [.activateIgnoringOtherApps])
+            matching[0].activate(options: [.activateIgnoringOtherApps])
             Log.app.info("起動済み実行ファイルを activate: \(expanded)")
             return
         }
