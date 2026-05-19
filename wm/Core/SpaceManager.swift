@@ -82,25 +82,43 @@ enum SpaceManager {
 
         _ = targetWID
 
-        // ターゲット Space を含むディスプレイを見つけて切り替える。
-        // AX 操作（raise / kAXMainAttribute / kAXFocusedAttribute）と
-        // NSRunningApplication.activate は、別 Space のウィンドウを
-        // 現在 Space に引きずり込む副作用があるため一切呼ばない。
-        // Space 内の z-order によって対象ウィンドウは自動的に手前に出る
+        // ターゲット Space のディスプレイと、同一ディスプレイ内の Space インデックス差分を計算する。
+        // CGSManagedDisplaySetCurrentSpace は内部状態だけを書き換え、Mission Control の
+        // アニメーションが走らず「現在 Space に別ウィンドウが現れた」ように見えるため、
+        // 代わりに macOS 標準ショートカット Ctrl+← / Ctrl+→ を CGEvent で送出して
+        // 必要回数だけ隣の Space へ移動する
         guard let displays = CGSCopyManagedDisplaySpaces(cid)?.takeRetainedValue() as? [[String: Any]] else {
             return false
         }
         for d in displays {
-            guard let displayID = d["Display Identifier"] as? String,
-                  let spaces = d["Spaces"] as? [[String: Any]] else { continue }
-            for s in spaces {
-                guard let sid = s["id64"] as? UInt64, sid == targetSpaceID else { continue }
-                CGSManagedDisplaySetCurrentSpace(cid, displayID as CFString, targetSpaceID)
-                Log.app.info("space cycle: switched display=\(displayID) -> space=\(targetSpaceID)")
-                return true
+            guard let spaces = d["Spaces"] as? [[String: Any]] else { continue }
+            let ids = spaces.compactMap { $0["id64"] as? UInt64 }
+            guard let targetIdx = ids.firstIndex(of: targetSpaceID),
+                  let focusedIdx = ids.firstIndex(of: focusedSpaceID) else { continue }
+            let diff = targetIdx - focusedIdx
+            guard diff != 0 else { return false }
+            let keyCode: CGKeyCode = diff > 0 ? 0x7C : 0x7B // 124=Right, 123=Left
+            let count = abs(diff)
+            Log.app.info("space cycle: ctrl+\(diff > 0 ? "→" : "←") x\(count)")
+            for _ in 0..<count {
+                postCtrlArrow(keyCode: keyCode)
             }
+            return true
         }
         return false
+    }
+
+    // Ctrl 修飾子付きで指定キーを 1 回押す
+    private static func postCtrlArrow(keyCode: CGKeyCode) {
+        let src = CGEventSource(stateID: .combinedSessionState)
+        if let down = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true) {
+            down.flags = .maskControl
+            down.post(tap: .cghidEventTap)
+        }
+        if let up = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: false) {
+            up.flags = .maskControl
+            up.post(tap: .cghidEventTap)
+        }
     }
 
     // MARK: - 内部ヘルパー
