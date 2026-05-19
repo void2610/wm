@@ -107,6 +107,15 @@ struct SettingsView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            if let hash = Bundle.main.infoDictionary?["GitCommitHash"] as? String,
+               !hash.isEmpty,
+               hash != "unknown",
+               let url = URL(string: "https://github.com/void2610/wm/commit/\(hash)") {
+                Link(destination: url) {
+                    Text("commit \(hash)")
+                        .font(.system(.callout, design: .monospaced))
+                }
+            }
             Link("GitHub", destination: URL(string: "https://github.com/void2610/wm")!)
         }
         .padding()
