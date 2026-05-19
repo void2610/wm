@@ -32,6 +32,15 @@ enum SpaceManager {
     @_silgen_name("_AXUIElementGetWindow")
     static func _AXUIElementGetWindow(_ element: AXUIElement, _ windowID: UnsafeMutablePointer<CGWindowID>) -> AXError
 
+    // CGEventField の Swift initializer は public な enum case しか受け付けず、
+    // yabai が使う private field 値 (55, 110, 123, 124, 129, 132) に対して nil を返すため、
+    // C 関数を直接呼ぶ
+    @_silgen_name("CGEventSetIntegerValueField")
+    static func _CGEventSetIntegerValueField(_ event: CGEvent, _ field: UInt32, _ value: Int64)
+
+    @_silgen_name("CGEventSetDoubleValueField")
+    static func _CGEventSetDoubleValueField(_ event: CGEvent, _ field: UInt32, _ value: Double)
+
     // MARK: - 公開関数
 
     // 指定 pid の通常ウィンドウのうち、現在 focused のウィンドウとは別 Space にある
@@ -128,18 +137,18 @@ enum SpaceManager {
         let count = abs(diff)
 
         // kCGSEventDockControl 種別と kIOHIDEventTypeDockSwipe を示す private field
-        event.setIntegerValueField(CGEventField(rawValue: 55), value: 30)
-        event.setIntegerValueField(CGEventField(rawValue: 110), value: 23)
-        event.setIntegerValueField(CGEventField(rawValue: 123), value: 1)
-        event.setDoubleValueField(CGEventField(rawValue: 124), value: sign)
-        event.setDoubleValueField(CGEventField(rawValue: 129), value: sign * 9999.0)
+        _CGEventSetIntegerValueField(event, 55, 30)
+        _CGEventSetIntegerValueField(event, 110, 23)
+        _CGEventSetIntegerValueField(event, 123, 1)
+        _CGEventSetDoubleValueField(event, 124, sign)
+        _CGEventSetDoubleValueField(event, 129, sign * 9999.0)
 
         for _ in 0..<count {
             // phase: began
-            event.setIntegerValueField(CGEventField(rawValue: 132), value: 1)
+            _CGEventSetIntegerValueField(event, 132, 1)
             event.post(tap: .cgSessionEventTap)
             // phase: ended
-            event.setIntegerValueField(CGEventField(rawValue: 132), value: 4)
+            _CGEventSetIntegerValueField(event, 132, 4)
             event.post(tap: .cgSessionEventTap)
         }
     }
