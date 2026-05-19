@@ -104,18 +104,50 @@ enum AccessibilityClient {
     }
 
     // ウィンドウの frame（位置 + サイズ）をまとめてセットする。
-    // size → position → size の順で 2 回 size をセットする：
-    // - 1 回目の setSize で先にウィンドウを縮めておくと、その後の setPosition が
-    //   画面端でクランプされず確実に目標位置に動く。
-    // - 2 回目の setSize は、setPosition の副作用で size が変わるアプリへの保険。
-    // 例: 「上半分（全幅 × 半高）→ 右半分（半幅 × 全高）」のケースで、
-    // position → size の順だと 1 回目の setPosition が全幅状態のままなので
-    // 右にはみ出してクランプされ、結果として左半分になってしまう。
-    // size を先に縮めれば setPosition がクランプされない。
+    //
+    // macOS の Window Tiling 等で「最大化に近い」状態のウィンドウに対しては、
+    // 単発の setSize / setPosition だと システム側で 元 frame に強制復元される
+    // ことがある（setSize で size 反映 → 次の setPosition 時に size を 元値に巻き戻し、
+    // setPosition で pos 反映 → 次の setSize 時に pos を 元値に巻き戻す、の振動）。
+    //
+    // これを抑止するため、setFrame は app 引数を取る setFrameWithApp 版を使う。
+    // 後方互換のためのオーバーロード。
     static func setFrame(_ window: AXUIElement, _ frame: CGRect) {
         setSize(window, frame.size)
         setPosition(window, frame.origin)
         setSize(window, frame.size)
+    }
+
+    // app に AXEnhancedUserInterface = true を一時的に立てて AX 操作を行うと、
+    // 操作中はアプリ側の自動補正（Window Tiling の復元処理など）が走らず
+    // setSize / setPosition の打ち消し合いを回避できる。
+    // 操作後に必ず元の値に戻す。
+    static func setFrame(_ window: AXUIElement, app: AXUIElement, _ frame: CGRect) {
+        let enhancedKey = "AXEnhancedUserInterface" as CFString
+        var current: AnyObject?
+        AXUIElementCopyAttributeValue(app, enhancedKey, &current)
+        let wasEnabled = (current as? Bool) ?? false
+
+        // Enhanced UI が ON の状態だと AX 経由の setSize / setPosition がアプリ内で
+        // バッチ化・遅延されてしまい、片方しか反映されない（setSize は通るが
+        // setPosition は無視されるなど）。操作中は必ず OFF にしてから set し、
+        // 終わったら元の状態に戻す。
+        if wasEnabled {
+            AXUIElementSetAttributeValue(app, enhancedKey, kCFBooleanFalse)
+        }
+
+        setSize(window, frame.size)
+        setPosition(window, frame.origin)
+        setSize(window, frame.size)
+
+        if wasEnabled {
+            AXUIElementSetAttributeValue(app, enhancedKey, kCFBooleanTrue)
+        }
+
+        // 反映確認ログ
+        let pos = getPosition(window) ?? .zero
+        let size = getSize(window) ?? .zero
+        Log.window.info("setFrame(wasEnabled=\(wasEnabled)) target=\(String(describing: frame), privacy: .public) actual pos=\(String(describing: pos), privacy: .public) size=\(String(describing: size), privacy: .public)")
     }
 
     // ウィンドウの frame を取得する
@@ -159,9 +191,8 @@ enum AccessibilityClient {
         skipEnhancedFor bundleId: String? = nil,
         excluded: Set<String> = []
     ) {
-        _ = app
         _ = bundleId
         _ = excluded
-        setFrame(window, frame)
+        setFrame(window, app: app, frame)
     }
 }
