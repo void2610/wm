@@ -85,22 +85,34 @@ enum AppLauncher {
     }
 
     // 指定 pid のアプリの focused window 以外のウィンドウへ巡回し raise する。
-    // ウィンドウが 1 つしか無い、または focused が無いなどで巡回不能なら false
+    // ウィンドウが 1 つしか無いなど巡回不能なら false。
+    // AXUIElement は同一ウィンドウでも別インスタンスが返ることがあり CFEqual での
+    // 同一性比較が信頼できないため、frame で focused window を識別する
     private static func cycleToNextWindow(pid: pid_t) -> Bool {
         let app = AXUIElementCreateApplication(pid)
         let windows = AccessibilityClient.windows(of: app)
         guard windows.count >= 2 else { return false }
 
-        // focused window のインデックスを起点に、次のウィンドウを raise する。
-        // focused が特定できなければ先頭から
-        let focused = AccessibilityClient.focusedWindow(of: app)
-        let baseIndex: Int
-        if let focused, let idx = windows.firstIndex(where: { CFEqual($0, focused) }) {
-            baseIndex = idx
-        } else {
-            baseIndex = -1
+        let focusedFrame = AccessibilityClient.focusedWindow(of: app)
+            .flatMap { AccessibilityClient.getFrame($0) }
+
+        // focused と frame が一致するもののインデックスを起点に、次のウィンドウを raise する。
+        // 一致が無ければ先頭から
+        var baseIndex = -1
+        if let focusedFrame {
+            for (i, w) in windows.enumerated() {
+                if let f = AccessibilityClient.getFrame(w), f == focusedFrame {
+                    baseIndex = i
+                    break
+                }
+            }
         }
         let nextIndex = (baseIndex + 1) % windows.count
-        return AccessibilityClient.raise(windows[nextIndex])
+        let next = windows[nextIndex]
+        // kAXRaiseAction だけでは z-order が上がるだけで focused window 扱いに
+        // ならないアプリがあるため、main / focused 属性を明示的に true にする
+        AXUIElementSetAttributeValue(next, kAXMainAttribute as CFString, kCFBooleanTrue)
+        AXUIElementSetAttributeValue(next, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        return AccessibilityClient.raise(next)
     }
 }
