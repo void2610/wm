@@ -41,6 +41,24 @@ final class ConfigManager {
         startWatching()
     }
 
+    // general セクションを更新し、TOML ファイルに書き戻す。
+    // 設定 GUI からの編集はこの API を経由する。
+    // 既存ファイルの手書きコメントは TOMLEncoder の制限で保持されない
+    func saveGeneral(_ general: Config.General) {
+        current.general = general
+        do {
+            let encoder = TOMLEncoder()
+            let text = try encoder.encode(current)
+            try text.write(to: Self.configPath, atomically: true, encoding: .utf8)
+            lastError = nil
+            Log.config.info("config を更新して書き戻しました")
+            onChange?(current)
+        } catch {
+            lastError = String(describing: error)
+            Log.config.error("config の書き戻しに失敗: \(String(describing: error))")
+        }
+    }
+
     // ファイルを読み直して current を更新する。エラー時は旧設定を維持
     func reload() {
         let path = Self.configPath

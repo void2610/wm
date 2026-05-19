@@ -1,9 +1,13 @@
 import SwiftUI
 
-// 設定画面。ホットキーの編集は TOML を正とするため GUI からは閲覧と「config を開く」「reload」が中心。
-// general セクションのトグル / 数値だけ即時反映するためにバインドして書き戻すのが Phase 5.x の宿題。
+// 設定画面。general セクションの値はここで編集可能で、変更は即座に
+// ConfigManager.saveGeneral 経由で TOML に書き戻される。
+// hotkeys / launch は TOML を正として GUI からは閲覧のみ
 struct SettingsView: View {
-    @State private var config: Config = ConfigManager.shared.current
+    @State private var animationEnabled: Bool = ConfigManager.shared.current.general.animationEnabled
+    @State private var animationDuration: Double = ConfigManager.shared.current.general.animationDuration
+    @State private var padding: Int = ConfigManager.shared.current.general.padding
+    @State private var hotkeys: [String: String] = ConfigManager.shared.current.hotkeys
     @State private var lastError: String? = ConfigManager.shared.lastError
 
     var body: some View {
@@ -23,20 +27,32 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
-            Toggle("アニメーションを有効にする", isOn: .constant(config.general.animationEnabled))
-                .disabled(true)
-            HStack {
-                Text("アニメーション時間")
-                Spacer()
-                Text(String(format: "%.2f 秒", config.general.animationDuration))
-                    .foregroundStyle(.secondary)
+            Toggle("アニメーションを有効にする", isOn: $animationEnabled)
+                .onChange(of: animationEnabled) { _ in saveGeneral() }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("アニメーション時間")
+                    Spacer()
+                    Text(String(format: "%.2f 秒", animationDuration))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Slider(value: $animationDuration, in: 0.05...1.0, step: 0.05)
+                    .onChange(of: animationDuration) { _ in saveGeneral() }
             }
-            HStack {
-                Text("ウィンドウ間 padding")
-                Spacer()
-                Text("\(config.general.padding) px")
-                    .foregroundStyle(.secondary)
+
+            Stepper(value: $padding, in: 0...64, step: 1) {
+                HStack {
+                    Text("ウィンドウ間 padding")
+                    Spacer()
+                    Text("\(padding) px")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
             }
+            .onChange(of: padding) { _ in saveGeneral() }
+
             if let lastError {
                 Section("設定エラー") {
                     Text(lastError)
@@ -54,11 +70,11 @@ struct SettingsView: View {
             Text("ホットキーは TOML ファイルで編集してください。")
                 .foregroundStyle(.secondary)
             List {
-                ForEach(config.hotkeys.keys.sorted(), id: \.self) { key in
+                ForEach(hotkeys.keys.sorted(), id: \.self) { key in
                     HStack {
                         Text(key)
                         Spacer()
-                        Text(config.hotkeys[key] ?? "")
+                        Text(hotkeys[key] ?? "")
                             .foregroundStyle(.secondary)
                             .font(.system(.body, design: .monospaced))
                     }
@@ -97,8 +113,23 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // ConfigManager.current から @State を読み直す
     private func reloadFromManager() {
-        config = ConfigManager.shared.current
+        let cfg = ConfigManager.shared.current
+        animationEnabled = cfg.general.animationEnabled
+        animationDuration = cfg.general.animationDuration
+        padding = cfg.general.padding
+        hotkeys = cfg.hotkeys
+        lastError = ConfigManager.shared.lastError
+    }
+
+    // general セクションを ConfigManager 経由で TOML に書き戻す
+    private func saveGeneral() {
+        var g = ConfigManager.shared.current.general
+        g.animationEnabled = animationEnabled
+        g.animationDuration = animationDuration
+        g.padding = padding
+        ConfigManager.shared.saveGeneral(g)
         lastError = ConfigManager.shared.lastError
     }
 }
