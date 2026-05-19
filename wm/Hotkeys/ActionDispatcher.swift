@@ -3,7 +3,6 @@ import Foundation
 // ホットキー → アクション の中継層。Command パターンで疎結合にしておき、
 // CLI 連携（wm focus left など）が来てもここで集約できるようにする。
 enum Action: Equatable {
-    case focus(FocusNavigator.Direction)
     case snapLeft, snapRight, snapTop, snapBottom
     case maximize, center, toggleFullscreen
     case launchApp(bundleId: String)
@@ -14,8 +13,6 @@ enum Action: Equatable {
 enum ActionDispatcher {
     static func dispatch(_ action: Action) {
         switch action {
-        case .focus(let dir):
-            FocusNavigator.focus(dir)
         case .snapLeft:
             WindowController.snapToLeftHalf()
         case .snapRight:

@@ -8,11 +8,6 @@ animation_duration = 0.25
 padding = 8
 
 [hotkeys]
-focus_left  = "cmd+opt+left"
-focus_right = "cmd+opt+right"
-focus_up    = "cmd+opt+up"
-focus_down  = "cmd+opt+down"
-
 # snap_left / snap_right は同じキーを連打すると
 #   半分 → 上 1/4 → 下 1/4 → 半分 → ...
 # と巡回する。snap_top は

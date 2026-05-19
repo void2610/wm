@@ -66,10 +66,6 @@ struct Config: Codable, Equatable {
 extension Config {
     static func action(forHotkeyKey key: String) -> Action? {
         switch key {
-        case "focus_left":        return .focus(.left)
-        case "focus_right":       return .focus(.right)
-        case "focus_up":          return .focus(.up)
-        case "focus_down":        return .focus(.down)
         case "snap_left":         return .snapLeft
         case "snap_right":        return .snapRight
         case "snap_top":          return .snapTop
