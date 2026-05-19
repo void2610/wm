@@ -4,11 +4,16 @@ import AppKit
 // .app は activate / openApplication 経由、それ以外の実行ファイルは Process で起動する
 enum AppLauncher {
 
-    // 指定 bundle id のアプリを起動、または既に起動済みなら最前面に呼ぶ
+    // 指定 bundle id のアプリを起動、または既に起動済みなら最前面に呼ぶ。
+    // 既に対象アプリが frontmost のときは、同アプリ内の別ウィンドウへ巡回する
     static func launch(bundleId: String) {
-        // 起動済みインスタンスがあれば activate
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
         if let app = running.first {
+            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleId,
+               cycleToNextWindow(pid: app.processIdentifier) {
+                Log.app.info("同アプリ別ウィンドウへ巡回: \(bundleId)")
+                return
+            }
             app.activate(options: [.activateIgnoringOtherApps])
             Log.app.info("起動済みアプリを activate: \(bundleId)")
             return
@@ -58,6 +63,11 @@ enum AppLauncher {
             guard let exe = app.executableURL?.resolvingSymlinksInPath().path else { return false }
             return exe == resolvedTarget
         }) {
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == running.processIdentifier,
+               cycleToNextWindow(pid: running.processIdentifier) {
+                Log.app.info("同アプリ別ウィンドウへ巡回: \(expanded)")
+                return
+            }
             running.activate(options: [.activateIgnoringOtherApps])
             Log.app.info("起動済み実行ファイルを activate: \(expanded)")
             return
@@ -72,5 +82,25 @@ enum AppLauncher {
         } catch {
             Log.app.error("実行ファイル起動に失敗: \(expanded) \(String(describing: error))")
         }
+    }
+
+    // 指定 pid のアプリの focused window 以外のウィンドウへ巡回し raise する。
+    // ウィンドウが 1 つしか無い、または focused が無いなどで巡回不能なら false
+    private static func cycleToNextWindow(pid: pid_t) -> Bool {
+        let app = AXUIElementCreateApplication(pid)
+        let windows = AccessibilityClient.windows(of: app)
+        guard windows.count >= 2 else { return false }
+
+        // focused window のインデックスを起点に、次のウィンドウを raise する。
+        // focused が特定できなければ先頭から
+        let focused = AccessibilityClient.focusedWindow(of: app)
+        let baseIndex: Int
+        if let focused, let idx = windows.firstIndex(where: { CFEqual($0, focused) }) {
+            baseIndex = idx
+        } else {
+            baseIndex = -1
+        }
+        let nextIndex = (baseIndex + 1) % windows.count
+        return AccessibilityClient.raise(windows[nextIndex])
     }
 }
