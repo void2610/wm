@@ -96,10 +96,8 @@ enum SpaceManager {
                   let focusedIdx = ids.firstIndex(of: focusedSpaceID) else { continue }
             let diff = targetIdx - focusedIdx
             guard diff != 0 else { return false }
-            let direction = diff > 0 ? "right" : "left"
-            let count = abs(diff)
-            Log.app.info("space cycle: AppleScript diff=\(diff) focusedIdx=\(focusedIdx) targetIdx=\(targetIdx) ids.count=\(ids.count)")
-            sendCtrlArrow(direction: direction, count: count)
+            Log.app.info("space cycle: dockSwipe diff=\(diff) focusedIdx=\(focusedIdx) targetIdx=\(targetIdx) ids.count=\(ids.count)")
+            sendDockSwipe(diff: diff)
             return true
         }
         Log.app.info("space cycle: target が managed display に未登録（フルスクリーン Space の可能性）")
@@ -116,23 +114,33 @@ enum SpaceManager {
         return result.map { $0.uint64Value }
     }
 
-    // Mission Control の Ctrl+←/→ ショートカットを AppleScript (System Events) 経由で
-    // count 回発火する。CGEvent 経由だと macOS の Space 切替が認識しないため、
-    // System Events 経由のキー送出にする。「オートメーション」TCC 権限が必要
-    private static func sendCtrlArrow(direction: String, count: Int) {
-        let keyCode = direction == "right" ? 124 : 123
-        let script = """
-        tell application "System Events"
-            repeat \(count) times
-                key code \(keyCode) using control down
-            end repeat
-        end tell
-        """
-        var error: NSDictionary?
-        guard let scriptObj = NSAppleScript(source: script) else { return }
-        scriptObj.executeAndReturnError(&error)
-        if let error {
-            Log.app.error("space cycle: AppleScript エラー \(error)")
+    // yabai 方式の dock swipe gesture を CGEvent で合成して Space を切り替える。
+    // Mission Control の Ctrl+←/→ ショートカットはユーザー設定で無効化されている可能性が
+    // あり、AppleScript で key code を送っても system が Space 切替として解釈しない
+    // ケースがある。dock swipe は OS が直接 listen している low-level なイベントなので
+    // ユーザー設定に依存しない。
+    //
+    // yabai/src/space_manager.c の space_manager_focus_space_using_gesture 相当。
+    // 1 イベントを作って、phase 1 (began) と 4 (ended) を count 回ペアで post する
+    private static func sendDockSwipe(diff: Int) {
+        guard let event = CGEvent(source: nil) else { return }
+        let sign: Double = diff > 0 ? 1.0 : -1.0
+        let count = abs(diff)
+
+        // kCGSEventDockControl 種別と kIOHIDEventTypeDockSwipe を示す private field
+        event.setIntegerValueField(CGEventField(rawValue: 55), value: 30)
+        event.setIntegerValueField(CGEventField(rawValue: 110), value: 23)
+        event.setIntegerValueField(CGEventField(rawValue: 123), value: 1)
+        event.setDoubleValueField(CGEventField(rawValue: 124), value: sign)
+        event.setDoubleValueField(CGEventField(rawValue: 129), value: sign * 9999.0)
+
+        for _ in 0..<count {
+            // phase: began
+            event.setIntegerValueField(CGEventField(rawValue: 132), value: 1)
+            event.post(tap: .cgSessionEventTap)
+            // phase: ended
+            event.setIntegerValueField(CGEventField(rawValue: 132), value: 4)
+            event.post(tap: .cgSessionEventTap)
         }
     }
 }
