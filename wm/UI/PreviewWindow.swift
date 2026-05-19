@@ -9,15 +9,21 @@ import Combine
 //   ケースがある。そのため show() で渡された target rect を含むスクリーン 1 枚分だけを
 //   その都度 panel の frame にし、SwiftUI 側ではパネル内ローカル座標に矩形を配置する方式に
 //   している。スナップ操作はスクリーンを跨がない前提
-// - show のときだけ orderFrontRegardless し、フェード完了後に orderOut する。
-//   常時 visible で画面上に存在させると、透明・mouseEvents 無視であってもシステムの Dock
-//   自動非表示が抑制されて Dock が出っぱなしになるため
+// - フェード in/out は **panel.alphaValue** を自前 Timer で 60Hz 補間する。SwiftUI の
+//   .opacity / withAnimation は連続 show / hide のタイミングで補間状態をリセットしにくく、
+//   「アニメが終わった直後に次が始まると途中からしか見えない」症状を踏みやすい。
+//   NSWindow.animator().alphaValue も CAAnimation が backing layer に attach されて
+//   contentView.layer.removeAllAnimations() では止められないため、自前 Timer で
+//   invalidate() ベースの確実な停止を可能にする
+// - スライド（rect の補間）は SwiftUI 側で withAnimation する。これは中身の矩形の
+//   位置補間で、panel 自体は動かさない
+// - hide のフェードアウト完了後、orderOut は 2 秒遅延させる。直後に orderOut すると、
+//   次の show での orderFrontRegardless 〜 最初の描画フレームに遅延が発生し、
+//   フェードインの先頭が見えなくなる。連続 show 時には orderOutWorkItem.cancel() で
+//   遅延 orderOut を取り消し、panel は alpha=0 のまま visible で残す。
+//   2 秒経って show が来なければ orderOut して Dock 自動非表示の抑制を解除する
 // - NSWindow.animator().setFrame で window 自身の frame を動かす方式は連続呼出時に
-//   AppKit 側のアニメ状態が不安定になるため使わない。中の矩形（rect）を SwiftUI の
-//   @Published + withAnimation で補間する
-// - rect / isVisible のアニメは ConfigManager.animation_duration の有限時間 easeOut に揃え、
-//   autoHide のタイミングをスライド完走と一致させる。spring は terminate 時刻が不確定で
-//   スライドが終わる前に hide() が走るとフェード中もスライドが続いてしまうため使わない
+//   AppKit 側のアニメ状態が不安定になるため使わない
 @MainActor
 final class PreviewWindow {
     static let shared = PreviewWindow()
@@ -26,21 +32,61 @@ final class PreviewWindow {
     private var hostingView: NSHostingView<PreviewView>?
     private let viewModel = PreviewViewModel()
     private var autoHideWorkItem: DispatchWorkItem?
-    // フェード退出完了後に panel を orderOut するためのワークアイテム。
-    // 次回 show のときに必ずキャンセルする
+    // フェード退出完了後に panel を orderOut するためのワークアイテム
     private var orderOutWorkItem: DispatchWorkItem?
+
+    // alphaValue を自前で補間する Timer（invalidate() で確実に停止できる）
+    private var fadeTimer: Timer?
+    private var fadeStartTime: CFTimeInterval = 0
+    private var fadeStartAlpha: CGFloat = 0
+    private var fadeTargetAlpha: CGFloat = 0
+    private var fadeDuration: TimeInterval = 0
+    private var fadeOnFinish: (() -> Void)?
 
     private init() {}
 
-    // 現在の config から有限時間の easing を作る。
-    // ここで使う duration が autoHideAfter とも揃うことで、スライド完走 → 即 hide が
-    // 確定的なタイムラインとして組める
+    // alphaValue を from→to に easeOut で補間する。進行中の補間は強制停止して
+    // 新しい補間で上書きする
+    private func animateAlpha(from: CGFloat, to: CGFloat, duration: TimeInterval, onFinish: (() -> Void)? = nil) {
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+        guard let panel = panel else { onFinish?(); return }
+
+        panel.alphaValue = from
+        fadeStartTime = CACurrentMediaTime()
+        fadeStartAlpha = from
+        fadeTargetAlpha = to
+        fadeDuration = duration
+        fadeOnFinish = onFinish
+
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                guard let self, let panel = self.panel else { timer.invalidate(); return }
+                let elapsed = CACurrentMediaTime() - self.fadeStartTime
+                let t = min(max(elapsed / self.fadeDuration, 0), 1)
+                // easeOut: 1 - (1 - t)^2
+                let eased = 1 - (1 - t) * (1 - t)
+                panel.alphaValue = self.fadeStartAlpha + (self.fadeTargetAlpha - self.fadeStartAlpha) * eased
+                if t >= 1 {
+                    timer.invalidate()
+                    self.fadeTimer = nil
+                    let cb = self.fadeOnFinish
+                    self.fadeOnFinish = nil
+                    cb?()
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        fadeTimer = timer
+    }
+
+    // 現在の config から有限時間の easing を作る
     private var slideAnim: Animation {
         Anim.snapSlide(duration: ConfigManager.shared.current.general.animationDuration)
     }
 
     // 指定 frame の位置にプレビューを表示する。引数は NSScreen グローバル座標。
-    // from が指定されていれば、非表示状態からの初回出現を from→target のスライドで表現する。
+    // from が指定されていれば、from→target のスライドで表現する。
     // 既に表示中なら from は無視して現在位置から target へ補間する。
     // autoHideAfter > 0 のときは指定秒後に自動 hide。連打時は前の自動 hide をキャンセル
     func show(at frame: CGRect, from startFrame: CGRect? = nil, autoHideAfter: TimeInterval = 0) {
@@ -48,49 +94,61 @@ final class PreviewWindow {
         ensurePanel()
 
         autoHideWorkItem?.cancel()
-        // 前回の hide で予約された orderOut を取り消す
         orderOutWorkItem?.cancel()
 
-        // target rect を含むスクリーンを panel の表示先にする。from と target で
-        // スクリーンが違う場合は target 側を優先する（snap は同一スクリーン内で
-        // 完結する想定だが、念のため target 基準で揃える）
+        // target rect を含むスクリーンを panel の表示先にする
         let targetScreen = NSScreen.containing(point: CGPoint(x: frame.midX, y: frame.midY))
         let overlay = targetScreen.visibleFrame
         viewModel.overlayFrame = overlay
-        if let panel = panel {
-            panel.setFrame(overlay, display: panel.isVisible)
+
+        guard let panel = panel else { return }
+
+        panel.setFrame(overlay, display: panel.isVisible)
+
+        let dur = ConfigManager.shared.current.general.animationDuration
+        let currentAlpha = panel.alphaValue
+        let isCompletelyHidden = !panel.isVisible || (currentAlpha < 0.001 && fadeTimer == nil)
+
+        if isCompletelyHidden {
+            // 完全に消えた状態（初回 or hide 完了後）からの出現。
+            fadeTimer?.invalidate()
+            fadeTimer = nil
             if !panel.isVisible {
                 panel.orderFrontRegardless()
             }
-        }
-
-        let anim = slideAnim
-
-        if viewModel.isVisible {
-            // 表示中: 現在の rect から target へ補間
-            withAnimation(anim) {
-                viewModel.rect = frame
-            }
-        } else {
-            // 非表示状態: まず from（指定無ければ target）に瞬間配置 → 次の runloop で target へ補間。
-            // 1 段階目を transaction(disablesAnimations) で囲むことで、startFrame への
-            // 配置はアニメーションさせない
             let start = startFrame ?? frame
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
+            // generation を inc して view ツリーを再生成し、SwiftUI の補間器を
+            // 完全にリセットする。同時に rect も start に確定配置
+            viewModel.generation &+= 1
+            var resetTx = Transaction()
+            resetTx.disablesAnimations = true
+            withTransaction(resetTx) {
                 viewModel.rect = start
             }
-            withAnimation(anim) {
-                viewModel.isVisible = true
-            }
-            // 次の runloop tick で target へ。start が一度 render された後の差分が
-            // withAnimation で補間されるため、見た目は from→target のスライドになる
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                withAnimation(self.slideAnim) {
-                    self.viewModel.rect = frame
+            hostingView?.layoutSubtreeIfNeeded()
+            panel.alphaValue = 0
+            panel.displayIfNeeded()
+
+            // 1 フレーム以上待ってから補間を発火する。DispatchQueue.main.async では
+            // 同 runloop iteration 内で消化されることがあり、SwiftUI が rect=start を
+            // 1 度も描画しないまま rect=frame の withAnimation を受け取ると
+            // 「前回 target → frame」の補間に潰れて start→frame のスライドが消える
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0 / 60.0) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.animateAlpha(from: 0, to: 1, duration: dur)
+                    withAnimation(self.slideAnim) {
+                        self.viewModel.rect = frame
+                    }
                 }
+            }
+        } else {
+            // 既に何かしら見えている状態（完全表示 or フェード中）。
+            // alpha は現在値から 1 に「中断・反転」させ、rect は現在値から target へ補間する。
+            // これにより panel が一瞬消えるような切れ目が出ず、滑らかに次のアニメに繋がる
+            animateAlpha(from: currentAlpha, to: 1, duration: dur)
+            withAnimation(slideAnim) {
+                viewModel.rect = frame
             }
         }
 
@@ -103,29 +161,29 @@ final class PreviewWindow {
         }
     }
 
-    // プレビューを隠す（フェードアウト → 完了後に panel を orderOut）。
-    // orderOut しないと panel が常時画面上に居続け、システムの Dock 自動非表示が
-    // 抑制されてしまう
+    // プレビューを隠す（panel.alphaValue でフェードアウト → 完了後 2 秒遅延で orderOut）。
+    // orderOut を遅延させる理由はファイル冒頭コメント参照
     func hide() {
         autoHideWorkItem?.cancel()
+        orderOutWorkItem?.cancel()
+        guard let panel = panel else { return }
         let dur = ConfigManager.shared.current.general.animationDuration
-        withAnimation(slideAnim) {
-            viewModel.isVisible = false
+
+        animateAlpha(from: panel.alphaValue, to: 0, duration: dur) { [weak self] in
+            let delayed = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.panel?.orderOut(nil)
+                }
+            }
+            self?.orderOutWorkItem = delayed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: delayed)
         }
-        // フェード完了後に panel を画面から外す
-        let item = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated { self?.panel?.orderOut(nil) }
-        }
-        orderOutWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + dur, execute: item)
     }
 
     // 必要に応じて NSPanel を生成する。生成しただけでは画面に出さない。
-    // 実際の表示と frame 反映は show() で行う
     private func ensurePanel() {
         if panel != nil { return }
 
-        // 初期 frame は仮置き。show() で target スクリーンに合わせて毎回更新する
         let initial = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? .zero
 
         let panel = NSPanel(
@@ -142,6 +200,7 @@ final class PreviewWindow {
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = false
+        panel.alphaValue = 0
 
         let view = PreviewView(viewModel: viewModel)
         let host = NSHostingView(rootView: view)
@@ -151,9 +210,6 @@ final class PreviewWindow {
         hostingView = host
 
         panel.setFrame(initial, display: false)
-        // ここでは orderFront しない。show() で必要なときに前面化する。
-        // 常時 visible だと透明・mouseEvents 無視でもシステムの Dock 自動非表示が
-        // 抑制されて Dock が出っぱなしになるため
 
         self.panel = panel
     }
@@ -163,8 +219,9 @@ final class PreviewWindow {
 @MainActor
 final class PreviewViewModel: ObservableObject {
     @Published var rect: CGRect = .zero
-    @Published var isVisible: Bool = false
-    // 現在 panel が乗っているスクリーンの visibleFrame（NSScreen グローバル座標）。
-    // SwiftUI 側で rect をパネル内ローカル座標へ変換するのに使う
+    // 現在 panel が乗っているスクリーンの visibleFrame（NSScreen グローバル座標）
     @Published var overlayFrame: CGRect = .zero
+    // show() のたびに inc される世代カウンタ。PreviewView の .id() に渡すことで
+    // SwiftUI の補間器・@State を完全リセットし、前回 show の補間状態を持ち越さない
+    @Published var generation: Int = 0
 }

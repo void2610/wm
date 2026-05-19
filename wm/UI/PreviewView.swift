@@ -1,7 +1,8 @@
 import SwiftUI
 
 // プレビューウィンドウの中身。
-// 切り分け中: scale 系を全て外し、純粋な opacity のみで in/out させる
+// in/out のフェードは PreviewWindow 側で panel.alphaValue を NSAnimationContext で
+// 補間する設計なので、ここでは opacity を扱わない。中身の rect 位置補間のみ担当する
 struct PreviewView: View {
     @ObservedObject var viewModel: PreviewViewModel
 
@@ -27,7 +28,9 @@ struct PreviewView: View {
                 )
                 .frame(width: r.width, height: r.height)
                 .offset(x: localX, y: localTop)
-                .opacity(viewModel.isVisible ? 1.0 : 0.0)
         }
+        // generation を id にすることで、show() ごとに view ツリーが再生成され、
+        // SwiftUI の補間器・@State が完全にリセットされる
+        .id(viewModel.generation)
     }
 }
