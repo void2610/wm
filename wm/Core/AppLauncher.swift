@@ -9,12 +9,20 @@ enum AppLauncher {
     static func launch(bundleId: String) {
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
         if !running.isEmpty {
-            // どれかのインスタンスが active なら同一プロセス内の別ウィンドウへ巡回。
-            // 別 Space ウィンドウへの巡回は未対応（フルスクリーン Space を絡めた挙動が
-            // 制御困難なため、現状は通常 activate にフォールバック）
+            // どれかのインスタンスが active なら巡回モード。
+            // 同一プロセス内の別ウィンドウ → 別 Space の同アプリウィンドウ の順で試す。
+            // 別 Space 巡回が false（target がフルスクリーン Space などで未対応）の場合は
+            // 通常 activate にフォールバックし、macOS のシステム挙動に任せる
             if let activeApp = running.first(where: { $0.isActive }) {
-                if cycleToNextWindow(pid: activeApp.processIdentifier) {
+                let pid = activeApp.processIdentifier
+                if cycleToNextWindow(pid: pid) {
                     Log.app.info("同アプリ別ウィンドウへ巡回: \(bundleId)")
+                    return
+                }
+                let app = AXUIElementCreateApplication(pid)
+                let focused = AccessibilityClient.focusedWindow(of: app)
+                if SpaceManager.cycleToAnotherSpaceWindow(pid: pid, focusedWindow: focused) {
+                    Log.app.info("別 Space の同アプリウィンドウへ巡回: \(bundleId)")
                     return
                 }
             }
