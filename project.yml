@@ -74,8 +74,12 @@ targets:
       - name: "Embed Git Commit Hash"
         # ビルド成果物の Info.plist に現在の git short hash を埋め込む。
         # ソース側の Info.plist は触らないので git diff に出ない。
-        # basedOnDependencyAnalysis: false でないと incremental build で skip される
-        basedOnDependencyAnalysis: false
+        # Info.plist を inputFiles に指定することで、ProcessInfoPlistFile で
+        # plist が更新されたら必ずこの script も走るようにする
+        # （basedOnDependencyAnalysis: false だけでは target 全体が up-to-date
+        # 判定だと script phase まで到達せず skip されることがある）
+        inputFiles:
+          - "$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)"
         script: |
           set -e
           cd "$SRCROOT"
