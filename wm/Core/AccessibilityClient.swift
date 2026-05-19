@@ -143,11 +143,6 @@ enum AccessibilityClient {
         if wasEnabled {
             AXUIElementSetAttributeValue(app, enhancedKey, kCFBooleanTrue)
         }
-
-        // 反映確認ログ
-        let pos = getPosition(window) ?? .zero
-        let size = getSize(window) ?? .zero
-        Log.window.info("setFrame(wasEnabled=\(wasEnabled)) target=\(String(describing: frame), privacy: .public) actual pos=\(String(describing: pos), privacy: .public) size=\(String(describing: size), privacy: .public)")
     }
 
     // ウィンドウの frame を取得する

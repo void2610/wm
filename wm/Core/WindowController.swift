@@ -131,12 +131,10 @@ enum WindowController {
         // ならないことがあるため、適用後の実 frame を読み直してプレビューの終端
         // 位置として渡す。こうしないとアニメと実ウィンドウのサイズがずれて見える
         let axRect = NSScreen.convertToAX(nsRect)
-        Log.window.info("snap: screen.visibleFrame=\(String(describing: screen.visibleFrame), privacy: .public) currentNS=\(String(describing: currentNS), privacy: .public) targetNS=\(String(describing: nsRect), privacy: .public) targetAX=\(String(describing: axRect), privacy: .public)")
         applyFrame(axRect, to: target)
 
         let actualNS: CGRect = AccessibilityClient.getFrame(target.window)
             .map { NSScreen.convertFromAX($0) } ?? nsRect
-        Log.window.info("snap: actualNS=\(String(describing: actualNS), privacy: .public)")
 
         // autoHideAfter はスライドアニメ duration と一致させ、スライド完走と同時に
         // フェード退出が始まるようにする
