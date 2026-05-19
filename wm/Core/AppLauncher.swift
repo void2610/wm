@@ -9,25 +9,12 @@ enum AppLauncher {
     static func launch(bundleId: String) {
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
         if !running.isEmpty {
-            // どれかのインスタンスが active なら巡回モード。
-            // 同一 Space 内の別ウィンドウ → 別 Space のウィンドウ → 別プロセスインスタンスの順で試す
-            if let activeIdx = running.firstIndex(where: { $0.isActive }) {
-                let activeApp = running[activeIdx]
-                let pid = activeApp.processIdentifier
-                if cycleToNextWindow(pid: pid) {
+            // どれかのインスタンスが active なら同一プロセス内の別ウィンドウへ巡回。
+            // 別 Space ウィンドウへの巡回は未対応（フルスクリーン Space を絡めた挙動が
+            // 制御困難なため、現状は通常 activate にフォールバック）
+            if let activeApp = running.first(where: { $0.isActive }) {
+                if cycleToNextWindow(pid: activeApp.processIdentifier) {
                     Log.app.info("同アプリ別ウィンドウへ巡回: \(bundleId)")
-                    return
-                }
-                let app = AXUIElementCreateApplication(pid)
-                let focused = AccessibilityClient.focusedWindow(of: app)
-                if SpaceManager.cycleToAnotherSpaceWindow(pid: pid, focusedWindow: focused) {
-                    Log.app.info("別 Space の同アプリウィンドウへ巡回: \(bundleId)")
-                    return
-                }
-                if running.count >= 2 {
-                    let nextIdx = (activeIdx + 1) % running.count
-                    running[nextIdx].activate(options: [.activateIgnoringOtherApps])
-                    Log.app.info("別プロセスインスタンスへ巡回: \(bundleId) (\(running[nextIdx].processIdentifier))")
                     return
                 }
             }
@@ -81,16 +68,9 @@ enum AppLauncher {
             return exe == resolvedTarget
         }
         if !matching.isEmpty {
-            if let activeIdx = matching.firstIndex(where: { $0.isActive }) {
-                let activeApp = matching[activeIdx]
+            if let activeApp = matching.first(where: { $0.isActive }) {
                 if cycleToNextWindow(pid: activeApp.processIdentifier) {
                     Log.app.info("同アプリ別ウィンドウへ巡回: \(expanded)")
-                    return
-                }
-                if matching.count >= 2 {
-                    let nextIdx = (activeIdx + 1) % matching.count
-                    matching[nextIdx].activate(options: [.activateIgnoringOtherApps])
-                    Log.app.info("別プロセスインスタンスへ巡回: \(expanded)")
                     return
                 }
             }
