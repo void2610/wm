@@ -96,7 +96,7 @@ enum SpaceManager {
             guard diff != 0 else { return false }
             let direction = diff > 0 ? "right" : "left"
             let count = abs(diff)
-            Log.app.info("space cycle: CGEvent diff=\(diff) focusedIdx=\(focusedIdx) targetIdx=\(targetIdx) ids.count=\(ids.count)")
+            Log.app.info("space cycle: AppleScript diff=\(diff) focusedIdx=\(focusedIdx) targetIdx=\(targetIdx) ids.count=\(ids.count)")
             sendCtrlArrow(direction: direction, count: count)
             return true
         }
@@ -114,25 +114,23 @@ enum SpaceManager {
         return result.map { $0.uint64Value }
     }
 
-    // Mission Control の Ctrl+←/→ ショートカットを CGEvent で count 回発火する。
-    // osascript 依存を避けて wm 自身からキーイベントを送出する。アクセシビリティ権限が
-    // あれば追加の TCC は不要
+    // Mission Control の Ctrl+←/→ ショートカットを AppleScript (System Events) 経由で
+    // count 回発火する。CGEvent 経由だと macOS の Space 切替が認識しないため、
+    // System Events 経由のキー送出にする。「オートメーション」TCC 権限が必要
     private static func sendCtrlArrow(direction: String, count: Int) {
-        let keyCode: CGKeyCode = direction == "right" ? 0x7C : 0x7B // 124=Right, 123=Left
-        let src = CGEventSource(stateID: .hidSystemState)
-        for i in 0..<count {
-            if i > 0 {
-                // 連続押下時に macOS がイベントを取りこぼさないよう少し間隔を空ける
-                Thread.sleep(forTimeInterval: 0.08)
-            }
-            if let down = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true) {
-                down.flags = .maskControl
-                down.post(tap: .cghidEventTap)
-            }
-            if let up = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: false) {
-                up.flags = .maskControl
-                up.post(tap: .cghidEventTap)
-            }
+        let keyCode = direction == "right" ? 124 : 123
+        let script = """
+        tell application "System Events"
+            repeat \(count) times
+                key code \(keyCode) using control down
+            end repeat
+        end tell
+        """
+        var error: NSDictionary?
+        guard let scriptObj = NSAppleScript(source: script) else { return }
+        scriptObj.executeAndReturnError(&error)
+        if let error {
+            Log.app.error("space cycle: AppleScript エラー \(error)")
         }
     }
 }
