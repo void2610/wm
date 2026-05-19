@@ -80,14 +80,16 @@ enum SpaceManager {
         }
         Log.app.info("space cycle: targetWID=\(targetWID) targetSpace=\(targetSpaceID)")
 
+        _ = targetWID
+
         // ターゲット Space を含むディスプレイを見つけて切り替える。
-        // activate は呼ばない — 別 Space のウィンドウが現在 Space に引きずり込まれるため。
-        // Space 切り替え後は AX kAXWindowsAttribute からも対象ウィンドウが見えるので、
-        // 短い遅延を入れて改めて AX 経由で raise する
+        // AX 操作（raise / kAXMainAttribute / kAXFocusedAttribute）と
+        // NSRunningApplication.activate は、別 Space のウィンドウを
+        // 現在 Space に引きずり込む副作用があるため一切呼ばない。
+        // Space 内の z-order によって対象ウィンドウは自動的に手前に出る
         guard let displays = CGSCopyManagedDisplaySpaces(cid)?.takeRetainedValue() as? [[String: Any]] else {
             return false
         }
-        var switched = false
         for d in displays {
             guard let displayID = d["Display Identifier"] as? String,
                   let spaces = d["Spaces"] as? [[String: Any]] else { continue }
@@ -95,33 +97,10 @@ enum SpaceManager {
                 guard let sid = s["id64"] as? UInt64, sid == targetSpaceID else { continue }
                 CGSManagedDisplaySetCurrentSpace(cid, displayID as CFString, targetSpaceID)
                 Log.app.info("space cycle: switched display=\(displayID) -> space=\(targetSpaceID)")
-                switched = true
-                break
+                return true
             }
-            if switched { break }
         }
-        guard switched else { return false }
-
-        // Space 切り替え直後は AX 側の windows 一覧が古いことがあるので、次の runloop で raise
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            raiseAXWindow(pid: pid, matching: targetWID)
-        }
-        return true
-    }
-
-    // 指定 pid の AX ウィンドウ一覧から CGWindowID が一致するものを探して raise する
-    private static func raiseAXWindow(pid: pid_t, matching wid: CGWindowID) {
-        let app = AXUIElementCreateApplication(pid)
-        for w in AccessibilityClient.windows(of: app) {
-            var thisWID: CGWindowID = 0
-            guard _AXUIElementGetWindow(w, &thisWID) == .success, thisWID == wid else { continue }
-            AXUIElementSetAttributeValue(w, kAXMainAttribute as CFString, kCFBooleanTrue)
-            AXUIElementSetAttributeValue(w, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-            _ = AccessibilityClient.raise(w)
-            Log.app.info("space cycle: AX raise wid=\(wid)")
-            return
-        }
-        Log.app.info("space cycle: AX 側に wid=\(wid) が見つからず raise 省略")
+        return false
     }
 
     // MARK: - 内部ヘルパー
