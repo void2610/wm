@@ -9,8 +9,8 @@ enum AppLauncher {
     static func launch(bundleId: String) {
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId)
         if let app = running.first {
-            if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleId,
-               cycleToNextWindow(pid: app.processIdentifier) {
+            Log.app.info("launch(bundleId): \(bundleId) isActive=\(app.isActive) frontmost=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "nil")")
+            if app.isActive, cycleToNextWindow(pid: app.processIdentifier) {
                 Log.app.info("同アプリ別ウィンドウへ巡回: \(bundleId)")
                 return
             }
@@ -63,8 +63,8 @@ enum AppLauncher {
             guard let exe = app.executableURL?.resolvingSymlinksInPath().path else { return false }
             return exe == resolvedTarget
         }) {
-            if NSWorkspace.shared.frontmostApplication?.processIdentifier == running.processIdentifier,
-               cycleToNextWindow(pid: running.processIdentifier) {
+            Log.app.info("launch(path): \(expanded) isActive=\(running.isActive)")
+            if running.isActive, cycleToNextWindow(pid: running.processIdentifier) {
                 Log.app.info("同アプリ別ウィンドウへ巡回: \(expanded)")
                 return
             }
@@ -91,10 +91,12 @@ enum AppLauncher {
     private static func cycleToNextWindow(pid: pid_t) -> Bool {
         let app = AXUIElementCreateApplication(pid)
         let windows = AccessibilityClient.windows(of: app)
+        Log.app.info("cycle: windows.count=\(windows.count)")
         guard windows.count >= 2 else { return false }
 
         let focusedFrame = AccessibilityClient.focusedWindow(of: app)
             .flatMap { AccessibilityClient.getFrame($0) }
+        Log.app.info("cycle: focusedFrame=\(String(describing: focusedFrame))")
 
         // focused と frame が一致するもののインデックスを起点に、次のウィンドウを raise する。
         // 一致が無ければ先頭から
@@ -108,11 +110,14 @@ enum AppLauncher {
             }
         }
         let nextIndex = (baseIndex + 1) % windows.count
+        Log.app.info("cycle: baseIndex=\(baseIndex) nextIndex=\(nextIndex)")
         let next = windows[nextIndex]
         // kAXRaiseAction だけでは z-order が上がるだけで focused window 扱いに
         // ならないアプリがあるため、main / focused 属性を明示的に true にする
         AXUIElementSetAttributeValue(next, kAXMainAttribute as CFString, kCFBooleanTrue)
         AXUIElementSetAttributeValue(next, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-        return AccessibilityClient.raise(next)
+        let raised = AccessibilityClient.raise(next)
+        Log.app.info("cycle: raised=\(raised)")
+        return raised
     }
 }
