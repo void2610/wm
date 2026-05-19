@@ -4,12 +4,12 @@ import SwiftUI
 // 切り分け中: scale 系を全て外し、純粋な opacity のみで in/out させる
 struct PreviewView: View {
     @ObservedObject var viewModel: PreviewViewModel
-    let overlayFrameInScreen: CGRect
 
     var body: some View {
         let r = viewModel.rect
-        let localX = r.minX - overlayFrameInScreen.minX
-        let localTop = overlayFrameInScreen.maxY - r.maxY
+        let overlay = viewModel.overlayFrame
+        let localX = r.minX - overlay.minX
+        let localTop = overlay.maxY - r.maxY
 
         ZStack(alignment: .topLeading) {
             Color.clear
