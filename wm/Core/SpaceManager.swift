@@ -114,7 +114,10 @@ enum SpaceManager {
     }
 
     // AppleScript で Mission Control の Ctrl+←/→ ショートカットを count 回発火する。
-    // System Events 経由なので「オートメーション」TCC 権限が必要
+    // NSAppleScript.executeAndReturnError をメインスレッドで同期実行すると、その間に
+    // ホットキー登録（KeyboardShortcuts ライブラリ）の runloop 状態が壊れ、それ以降
+    // 一切ホットキーが拾われなくなる症状が出るため、/usr/bin/osascript を別プロセスで
+    // 非同期に起動して回避する。System Events 経由なので「オートメーション」TCC 権限が必要
     private static func sendCtrlArrow(direction: String, count: Int) {
         let keyCode = direction == "right" ? 124 : 123
         let script = """
@@ -124,11 +127,13 @@ enum SpaceManager {
             end repeat
         end tell
         """
-        var error: NSDictionary?
-        guard let scriptObj = NSAppleScript(source: script) else { return }
-        scriptObj.executeAndReturnError(&error)
-        if let error {
-            Log.app.error("space cycle: AppleScript エラー \(error)")
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        task.arguments = ["-e", script]
+        do {
+            try task.run()
+        } catch {
+            Log.app.error("space cycle: osascript 実行失敗 \(String(describing: error))")
         }
     }
 }
