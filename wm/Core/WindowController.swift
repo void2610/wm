@@ -64,17 +64,38 @@ enum WindowController {
         snap { screen, padding, _ in screen.paddedVisibleFrame(padding: padding) }
     }
 
-    // 現在のサイズを保ったまま画面中央に配置する。
+    // 中央寄せ。
+    //   中央未配置 → 現サイズのまま中央配置
+    //   中央配置済み（中サイズではない） → 中サイズ（visible の 60% × 70%）で中央配置
+    //   中サイズで中央配置済み → 変化なし
     // snap 共通処理を経由することでスライド+フェードのプレビューアニメも出る
     static func center() {
         snap { screen, _, currentNS in
             let visible = screen.visibleFrame
-            let size = currentNS?.size ?? .zero
+            let currentSize = currentNS?.size ?? .zero
+
+            let mediumSize = CGSize(
+                width: visible.width * 0.6,
+                height: visible.height * 0.7
+            )
+
+            let centerTolerance: CGFloat = 4
+            let isCentered: Bool = {
+                guard let cur = currentNS else { return false }
+                return abs(cur.midX - visible.midX) < centerTolerance
+                    && abs(cur.midY - visible.midY) < centerTolerance
+            }()
+            let sizeTolerance: CGFloat = 4
+            let isAlreadyMedium = abs(currentSize.width - mediumSize.width) < sizeTolerance
+                              && abs(currentSize.height - mediumSize.height) < sizeTolerance
+
+            let targetSize: CGSize = (isCentered && !isAlreadyMedium) ? mediumSize : currentSize
+
             return CGRect(
-                x: visible.midX - size.width / 2,
-                y: visible.midY - size.height / 2,
-                width: size.width,
-                height: size.height
+                x: visible.midX - targetSize.width / 2,
+                y: visible.midY - targetSize.height / 2,
+                width: targetSize.width,
+                height: targetSize.height
             )
         }
     }
