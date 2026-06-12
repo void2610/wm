@@ -115,7 +115,11 @@ enum WindowController {
         if let target = focusedTarget() {
             currentScreen = Self.currentScreen(of: target.window)
         } else {
-            currentScreen = NSScreen.main ?? NSScreen.screens.first ?? NSScreen.screens[0]
+            guard let screen = NSScreen.main ?? NSScreen.screens.first else {
+                Log.window.warning("利用可能なスクリーンがありません")
+                return
+            }
+            currentScreen = screen
         }
 
         guard let neighborScreen = findNeighborScreen(from: currentScreen, direction: direction) else {
