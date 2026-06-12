@@ -123,7 +123,7 @@ enum WindowController {
         }
 
         guard let neighborScreen = findNeighborScreen(from: currentScreen, direction: direction) else {
-            Log.window.debug("指定方向に隣接ディスプレイが見つかりません: \(String(describing: direction))")
+            Log.window.debug("指定方向に隣接ディスプレイが見つかりません: \(direction)")
             return
         }
 
@@ -200,8 +200,9 @@ enum WindowController {
 
     // 指定スクリーン上で最前面にあるウィンドウと、そのアプリ（AXUIElement, NSRunningApplication）を返す
     private static func findTopmostWindowOnScreen(_ screen: NSScreen) -> (window: AXUIElement, app: AXUIElement, runningApp: NSRunningApplication)? {
-        // NSWorkspace.shared.runningApplications を front-to-back 順（近似）で走査
-        // frontmostApplication を先頭に、他は activationPolicy == .regular のものを順に調べる
+        // NSWorkspace.shared.runningApplications は起動順であり、厳密な Z-order（front-to-back）
+        // ではない。完全な Z-order を得るには CGWindowListCopyWindowInfo 等が必要だが、
+        // 大半のユースケースでは frontmostApplication を先頭にすれば十分実用的
         var appsToCheck: [NSRunningApplication] = []
         var seen = Set<pid_t>()
         if let frontmost = NSWorkspace.shared.frontmostApplication {
