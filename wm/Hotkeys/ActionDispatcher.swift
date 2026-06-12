@@ -4,8 +4,17 @@ import Foundation
 // CLI 連携（wm focus left など）が来てもここで集約できるようにする。
 
 // ディスプレイ間のフォーカス移動方向
-enum Direction: Equatable {
+enum Direction: Equatable, CustomStringConvertible {
     case left, right, up, down
+
+    var description: String {
+        switch self {
+        case .left: return "left"
+        case .right: return "right"
+        case .up: return "up"
+        case .down: return "down"
+        }
+    }
 }
 
 enum Action: Equatable {
