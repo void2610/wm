@@ -106,6 +106,121 @@ enum WindowController {
         AccessibilityClient.toggleFullscreen(target.window)
     }
 
+    // MARK: - ディスプレイ間フォーカス移動
+
+    // 指定方向の隣接ディスプレイにある最前面ウィンドウにフォーカスを移す
+    static func focusDisplay(direction: Direction) {
+        // 現在フォーカスのあるウィンドウの属するスクリーンを基準にする
+        let currentScreen: NSScreen
+        if let target = focusedTarget() {
+            currentScreen = Self.currentScreen(of: target.window)
+        } else {
+            currentScreen = NSScreen.main ?? NSScreen.screens.first ?? NSScreen.screens[0]
+        }
+
+        guard let neighborScreen = findNeighborScreen(from: currentScreen, direction: direction) else {
+            Log.window.debug("指定方向に隣接ディスプレイが見つかりません: \(String(describing: direction))")
+            return
+        }
+
+        // 隣接ディスプレイ内に最前面ウィンドウがあればフォーカスを移す
+        guard let (window, app, runningApp) = findTopmostWindowOnScreen(neighborScreen) else {
+            Log.window.debug("隣接ディスプレイにウィンドウがありません")
+            return
+        }
+
+        // アプリをアクティベートしてウィンドウを raise
+        runningApp.activate()
+        AccessibilityClient.raise(window)
+        // raise 後に focused window を明示的に設定（複数ウィンドウを持つアプリ用）
+        AccessibilityClient.setFocusedWindow(window, of: app)
+    }
+
+    // 指定方向に隣接するスクリーンを探す
+    private static func findNeighborScreen(from current: NSScreen, direction: Direction) -> NSScreen? {
+        let screens = NSScreen.screens
+        guard screens.count > 1 else { return nil }
+
+        // NSScreen.frame は AppKit 座標系（左下原点）
+        let currentFrame = current.frame
+
+        var bestCandidate: NSScreen?
+        var bestDistance: CGFloat = .greatestFiniteMagnitude
+
+        for screen in screens where screen != current {
+            let frame = screen.frame
+            let isNeighbor: Bool
+            let distance: CGFloat
+
+            switch direction {
+            case .left:
+                // 現在スクリーンより左にあり、Y方向で重なりがあること
+                isNeighbor = frame.maxX <= currentFrame.minX + 1 && hasVerticalOverlap(frame, currentFrame)
+                distance = currentFrame.minX - frame.maxX
+            case .right:
+                // 現在スクリーンより右にあり、Y方向で重なりがあること
+                isNeighbor = frame.minX >= currentFrame.maxX - 1 && hasVerticalOverlap(frame, currentFrame)
+                distance = frame.minX - currentFrame.maxX
+            case .up:
+                // 現在スクリーンより上（AppKit座標なので maxY 方向）にあり、X方向で重なりがあること
+                isNeighbor = frame.minY >= currentFrame.maxY - 1 && hasHorizontalOverlap(frame, currentFrame)
+                distance = frame.minY - currentFrame.maxY
+            case .down:
+                // 現在スクリーンより下（AppKit座標なので minY 方向）にあり、X方向で重なりがあること
+                isNeighbor = frame.maxY <= currentFrame.minY + 1 && hasHorizontalOverlap(frame, currentFrame)
+                distance = currentFrame.minY - frame.maxY
+            }
+
+            if isNeighbor && distance >= 0 && distance < bestDistance {
+                bestDistance = distance
+                bestCandidate = screen
+            }
+        }
+
+        return bestCandidate
+    }
+
+    // 2つの矩形が垂直方向（Y軸）で重なっているか
+    private static func hasVerticalOverlap(_ a: CGRect, _ b: CGRect) -> Bool {
+        a.minY < b.maxY && a.maxY > b.minY
+    }
+
+    // 2つの矩形が水平方向（X軸）で重なっているか
+    private static func hasHorizontalOverlap(_ a: CGRect, _ b: CGRect) -> Bool {
+        a.minX < b.maxX && a.maxX > b.minX
+    }
+
+    // 指定スクリーン上で最前面にあるウィンドウと、そのアプリ（AXUIElement, NSRunningApplication）を返す
+    private static func findTopmostWindowOnScreen(_ screen: NSScreen) -> (window: AXUIElement, app: AXUIElement, runningApp: NSRunningApplication)? {
+        // NSWorkspace.shared.runningApplications を front-to-back 順（近似）で走査
+        // frontmostApplication を先頭に、他は activationPolicy == .regular のものを順に調べる
+        var appsToCheck: [NSRunningApplication] = []
+        if let frontmost = NSWorkspace.shared.frontmostApplication {
+            appsToCheck.append(frontmost)
+        }
+        for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
+            if !appsToCheck.contains(app) {
+                appsToCheck.append(app)
+            }
+        }
+
+        for runningApp in appsToCheck {
+            let appElement = AXUIElementCreateApplication(runningApp.processIdentifier)
+            let windows = AccessibilityClient.windows(of: appElement)
+
+            for window in windows {
+                guard let frame = AccessibilityClient.getFrame(window) else { continue }
+                // ウィンドウ中心が対象スクリーン内にあるか判定（AX座標→NSScreen座標変換）
+                let centerAX = CGPoint(x: frame.midX, y: frame.midY)
+                let ownerScreen = NSScreen.containingAX(point: centerAX)
+                if ownerScreen == screen {
+                    return (window, appElement, runningApp)
+                }
+            }
+        }
+        return nil
+    }
+
     // MARK: - 内部
 
     // 現在のフォーカスターゲット（app + window + bundleId）を返す

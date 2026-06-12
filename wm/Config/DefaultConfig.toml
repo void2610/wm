@@ -20,6 +20,13 @@ snap_bottom = "cmd+ctrl+down"
 maximize    = "cmd+ctrl+return"
 center      = "cmd+ctrl+c"
 
+# ディスプレイ間フォーカス移動
+# 指定方向の隣接ディスプレイにある最前面ウィンドウにフォーカスを移す
+# focus_display_left  = "cmd+opt+left"
+# focus_display_right = "cmd+opt+right"
+# focus_display_up    = "cmd+opt+up"
+# focus_display_down  = "cmd+opt+down"
+
 # アプリ起動ホットキーの例
 # bundle_id を指定すると LaunchServices 経由で .app を起動・activate する
 # [[launch]]

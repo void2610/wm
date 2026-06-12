@@ -171,6 +171,12 @@ enum AccessibilityClient {
         AXUIElementPerformAction(window, kAXRaiseAction as CFString) == .success
     }
 
+    // 指定ウィンドウを指定アプリの focused window に設定する
+    @discardableResult
+    static func setFocusedWindow(_ window: AXUIElement, of app: AXUIElement) -> Bool {
+        AXUIElementSetAttributeValue(app, kAXFocusedWindowAttribute as CFString, window) == .success
+    }
+
     // MARK: - AXEnhancedUserInterface
 
     // ウィンドウの frame をセットする（アプリ向け）。
