@@ -140,6 +140,9 @@ enum WindowController {
         AccessibilityClient.setFocusedWindow(window, of: app)
     }
 
+    // 隣接判定で使用する許容誤差（ピクセル）
+    private static let adjacencyTolerance: CGFloat = 1.0
+
     // 指定方向に隣接するスクリーンを探す
     private static func findNeighborScreen(from current: NSScreen, direction: Direction) -> NSScreen? {
         let screens = NSScreen.screens
@@ -147,6 +150,7 @@ enum WindowController {
 
         // NSScreen.frame は AppKit 座標系（左下原点）
         let currentFrame = current.frame
+        let tol = adjacencyTolerance
 
         var bestCandidate: NSScreen?
         var bestDistance: CGFloat = .greatestFiniteMagnitude
@@ -159,19 +163,19 @@ enum WindowController {
             switch direction {
             case .left:
                 // 現在スクリーンより左にあり、Y方向で重なりがあること
-                isNeighbor = frame.maxX <= currentFrame.minX + 1 && hasVerticalOverlap(frame, currentFrame)
+                isNeighbor = frame.maxX <= currentFrame.minX + tol && hasVerticalOverlap(frame, currentFrame)
                 distance = currentFrame.minX - frame.maxX
             case .right:
                 // 現在スクリーンより右にあり、Y方向で重なりがあること
-                isNeighbor = frame.minX >= currentFrame.maxX - 1 && hasVerticalOverlap(frame, currentFrame)
+                isNeighbor = frame.minX >= currentFrame.maxX - tol && hasVerticalOverlap(frame, currentFrame)
                 distance = frame.minX - currentFrame.maxX
             case .up:
                 // 現在スクリーンより上（AppKit座標なので maxY 方向）にあり、X方向で重なりがあること
-                isNeighbor = frame.minY >= currentFrame.maxY - 1 && hasHorizontalOverlap(frame, currentFrame)
+                isNeighbor = frame.minY >= currentFrame.maxY - tol && hasHorizontalOverlap(frame, currentFrame)
                 distance = frame.minY - currentFrame.maxY
             case .down:
                 // 現在スクリーンより下（AppKit座標なので minY 方向）にあり、X方向で重なりがあること
-                isNeighbor = frame.maxY <= currentFrame.minY + 1 && hasHorizontalOverlap(frame, currentFrame)
+                isNeighbor = frame.maxY <= currentFrame.minY + tol && hasHorizontalOverlap(frame, currentFrame)
                 distance = currentFrame.minY - frame.maxY
             }
 
@@ -199,12 +203,15 @@ enum WindowController {
         // NSWorkspace.shared.runningApplications を front-to-back 順（近似）で走査
         // frontmostApplication を先頭に、他は activationPolicy == .regular のものを順に調べる
         var appsToCheck: [NSRunningApplication] = []
+        var seen = Set<pid_t>()
         if let frontmost = NSWorkspace.shared.frontmostApplication {
             appsToCheck.append(frontmost)
+            seen.insert(frontmost.processIdentifier)
         }
         for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
-            if !appsToCheck.contains(app) {
+            if !seen.contains(app.processIdentifier) {
                 appsToCheck.append(app)
+                seen.insert(app.processIdentifier)
             }
         }
 
