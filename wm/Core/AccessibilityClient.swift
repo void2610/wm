@@ -177,6 +177,22 @@ enum AccessibilityClient {
         AXUIElementSetAttributeValue(app, kAXFocusedWindowAttribute as CFString, window) == .success
     }
 
+    // ウィンドウが最小化されているか
+    static func isMinimized(_ window: AXUIElement) -> Bool {
+        var value: AnyObject?
+        let result = AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &value)
+        guard result == .success, let bool = value as? Bool else { return false }
+        return bool
+    }
+
+    // ウィンドウが標準ウィンドウ（Finder のデスクトップやパネル等を除く）か
+    static func isStandardWindow(_ window: AXUIElement) -> Bool {
+        var value: AnyObject?
+        let result = AXUIElementCopyAttributeValue(window, kAXSubroleAttribute as CFString, &value)
+        guard result == .success, let subrole = value as? String else { return false }
+        return subrole == (kAXStandardWindowSubrole as String)
+    }
+
     // MARK: - AXEnhancedUserInterface
 
     // ウィンドウの frame をセットする（アプリ向け）。

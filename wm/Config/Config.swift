@@ -73,10 +73,10 @@ extension Config {
         case "maximize":          return .maximize
         case "center":            return .center
         case "toggle_fullscreen": return .toggleFullscreen
-        case "focus_display_left":  return .focusDisplay(.left)
-        case "focus_display_right": return .focusDisplay(.right)
-        case "focus_display_up":    return .focusDisplay(.up)
-        case "focus_display_down":  return .focusDisplay(.down)
+        case "focus_left":        return .focus(.left)
+        case "focus_right":       return .focus(.right)
+        case "focus_up":          return .focus(.up)
+        case "focus_down":        return .focus(.down)
         default:                  return nil
         }
     }

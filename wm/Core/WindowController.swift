@@ -106,131 +106,85 @@ enum WindowController {
         AccessibilityClient.toggleFullscreen(target.window)
     }
 
-    // MARK: - ディスプレイ間フォーカス移動
+    // MARK: - 方向フォーカス移動
 
-    // 指定方向の隣接ディスプレイにある最前面ウィンドウにフォーカスを移す
-    static func focusDisplay(direction: Direction) {
-        // 現在フォーカスのあるウィンドウの属するスクリーンを基準にする
-        let currentScreen: NSScreen
-        if let target = focusedTarget() {
-            currentScreen = Self.currentScreen(of: target.window)
+    // 指定方向にある最も近いウィンドウへフォーカスを移す。
+    // 同一 Space 内の全ウィンドウ（全ディスプレイ分）を対象に位置関係で選ぶため、
+    // 「同一画面の隣ウィンドウ → 無ければ隣ディスプレイのウィンドウ」が距離計算で
+    // 自然にカスケードされる。Spaces 間移動は AX が現 Space しか見えないため非対応。
+    static func focusDirection(_ direction: Direction) {
+        // 基準中心（NS 座標, Y 上方向）。focus が無ければ main スクリーン中央を起点にする
+        let origin: CGPoint
+        let currentWindow = focusedTarget()?.window
+        if let window = currentWindow, let axFrame = AccessibilityClient.getFrame(window) {
+            let ns = NSScreen.convertFromAX(axFrame)
+            origin = CGPoint(x: ns.midX, y: ns.midY)
         } else {
             guard let screen = NSScreen.main ?? NSScreen.screens.first else {
                 Log.window.warning("利用可能なスクリーンがありません")
                 return
             }
-            currentScreen = screen
+            origin = CGPoint(x: screen.frame.midX, y: screen.frame.midY)
         }
 
-        guard let neighborScreen = findNeighborScreen(from: currentScreen, direction: direction) else {
-            Log.window.debug("指定方向に隣接ディスプレイが見つかりません: \(direction)")
+        guard let best = bestWindow(in: direction, from: origin, excluding: currentWindow) else {
+            Log.window.debug("指定方向にフォーカス可能なウィンドウがありません: \(direction)")
             return
         }
 
-        // 隣接ディスプレイ内に最前面ウィンドウがあればフォーカスを移す
-        guard let (window, app, runningApp) = findTopmostWindowOnScreen(neighborScreen) else {
-            Log.window.debug("隣接ディスプレイにウィンドウがありません")
-            return
-        }
-
-        // アプリをアクティベートしてウィンドウを raise
-        runningApp.activate()
-        AccessibilityClient.raise(window)
+        best.runningApp.activate()
+        AccessibilityClient.raise(best.window)
         // raise 後に focused window を明示的に設定（複数ウィンドウを持つアプリ用）
-        AccessibilityClient.setFocusedWindow(window, of: app)
+        AccessibilityClient.setFocusedWindow(best.window, of: best.app)
     }
 
-    // 隣接判定で使用する許容誤差（ピクセル）
-    private static let adjacencyTolerance: CGFloat = 1.0
-
-    // 指定方向に隣接するスクリーンを探す
-    private static func findNeighborScreen(from current: NSScreen, direction: Direction) -> NSScreen? {
-        let screens = NSScreen.screens
-        guard screens.count > 1 else { return nil }
-
-        // NSScreen.frame は AppKit 座標系（左下原点）
-        let currentFrame = current.frame
-        let tol = adjacencyTolerance
-
-        var bestCandidate: NSScreen?
-        var bestDistance: CGFloat = .greatestFiniteMagnitude
-
-        for screen in screens where screen != current {
-            let frame = screen.frame
-            let isNeighbor: Bool
-            let distance: CGFloat
-
-            switch direction {
-            case .left:
-                // 現在スクリーンより左にあり、Y方向で重なりがあること
-                isNeighbor = frame.maxX <= currentFrame.minX + tol && hasVerticalOverlap(frame, currentFrame)
-                distance = currentFrame.minX - frame.maxX
-            case .right:
-                // 現在スクリーンより右にあり、Y方向で重なりがあること
-                isNeighbor = frame.minX >= currentFrame.maxX - tol && hasVerticalOverlap(frame, currentFrame)
-                distance = frame.minX - currentFrame.maxX
-            case .up:
-                // 現在スクリーンより上（AppKit座標なので maxY 方向）にあり、X方向で重なりがあること
-                isNeighbor = frame.minY >= currentFrame.maxY - tol && hasHorizontalOverlap(frame, currentFrame)
-                distance = frame.minY - currentFrame.maxY
-            case .down:
-                // 現在スクリーンより下（AppKit座標なので minY 方向）にあり、X方向で重なりがあること
-                isNeighbor = frame.maxY <= currentFrame.minY + tol && hasHorizontalOverlap(frame, currentFrame)
-                distance = currentFrame.minY - frame.maxY
-            }
-
-            if isNeighbor && distance >= 0 && distance < bestDistance {
-                bestDistance = distance
-                bestCandidate = screen
-            }
-        }
-
-        return bestCandidate
+    private struct WindowCandidate {
+        let window: AXUIElement
+        let app: AXUIElement
+        let runningApp: NSRunningApplication
     }
 
-    // 2つの矩形が垂直方向（Y軸）で重なっているか
-    private static func hasVerticalOverlap(_ a: CGRect, _ b: CGRect) -> Bool {
-        a.minY < b.maxY && a.maxY > b.minY
-    }
+    // 方向軸への変位がわずかでも前方であることを要求する許容誤差（ピクセル）
+    private static let directionTolerance: CGFloat = 1.0
+    // 直交方向のズレに掛ける重み。同方向に並ぶウィンドウを優先させる
+    private static let perpendicularWeight: CGFloat = 2.0
 
-    // 2つの矩形が水平方向（X軸）で重なっているか
-    private static func hasHorizontalOverlap(_ a: CGRect, _ b: CGRect) -> Bool {
-        a.minX < b.maxX && a.maxX > b.minX
-    }
+    // 指定方向にあるウィンドウのうち、軸方向に最も近く・直交方向のズレが小さいものを選ぶ
+    private static func bestWindow(in direction: Direction, from origin: CGPoint, excluding current: AXUIElement?) -> WindowCandidate? {
+        var best: WindowCandidate?
+        var bestScore = CGFloat.greatestFiniteMagnitude
 
-    // 指定スクリーン上で最前面にあるウィンドウと、そのアプリ（AXUIElement, NSRunningApplication）を返す
-    private static func findTopmostWindowOnScreen(_ screen: NSScreen) -> (window: AXUIElement, app: AXUIElement, runningApp: NSRunningApplication)? {
-        // NSWorkspace.shared.runningApplications は起動順であり、厳密な Z-order（front-to-back）
-        // ではない。完全な Z-order を得るには CGWindowListCopyWindowInfo 等が必要だが、
-        // 大半のユースケースでは frontmostApplication を先頭にすれば十分実用的
-        var appsToCheck: [NSRunningApplication] = []
-        var seen = Set<pid_t>()
-        if let frontmost = NSWorkspace.shared.frontmostApplication {
-            appsToCheck.append(frontmost)
-            seen.insert(frontmost.processIdentifier)
-        }
-        for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
-            if !seen.contains(app.processIdentifier) {
-                appsToCheck.append(app)
-                seen.insert(app.processIdentifier)
-            }
-        }
-
-        for runningApp in appsToCheck {
+        for runningApp in NSWorkspace.shared.runningApplications where runningApp.activationPolicy == .regular {
             let appElement = AXUIElementCreateApplication(runningApp.processIdentifier)
-            let windows = AccessibilityClient.windows(of: appElement)
+            for window in AccessibilityClient.windows(of: appElement) {
+                if let current, CFEqual(window, current) { continue }
+                if !AccessibilityClient.isStandardWindow(window) { continue }
+                if AccessibilityClient.isMinimized(window) { continue }
+                guard let axFrame = AccessibilityClient.getFrame(window),
+                      axFrame.width > 1, axFrame.height > 1 else { continue }
 
-            for window in windows {
-                guard let frame = AccessibilityClient.getFrame(window) else { continue }
-                // ウィンドウ中心が対象スクリーン内にあるか判定（AX座標→NSScreen座標変換）
-                let centerAX = CGPoint(x: frame.midX, y: frame.midY)
-                let ownerScreen = NSScreen.containingAX(point: centerAX)
-                if ownerScreen == screen {
-                    return (window, appElement, runningApp)
+                let ns = NSScreen.convertFromAX(axFrame)
+                let center = CGPoint(x: ns.midX, y: ns.midY)
+
+                // along: 指定方向への変位（正で前方）、perp: 直交方向のズレ
+                let along: CGFloat
+                let perp: CGFloat
+                switch direction {
+                case .right: along = center.x - origin.x; perp = abs(center.y - origin.y)
+                case .left:  along = origin.x - center.x; perp = abs(center.y - origin.y)
+                case .up:    along = center.y - origin.y; perp = abs(center.x - origin.x)
+                case .down:  along = origin.y - center.y; perp = abs(center.x - origin.x)
+                }
+                guard along > directionTolerance else { continue }
+
+                let score = along + perpendicularWeight * perp
+                if score < bestScore {
+                    bestScore = score
+                    best = WindowCandidate(window: window, app: appElement, runningApp: runningApp)
                 }
             }
         }
-        return nil
+        return best
     }
 
     // MARK: - 内部
